@@ -37,7 +37,6 @@ public class UnchangedApplicationActionCalculator implements ActionCalculator {
                     actionsToExecute.add(ApplicationStateAction.EXECUTE);
                 }
                 return actionsToExecute;
-
             default:
                 throw new IllegalStateException(MessageFormat.format(Messages.ILLEGAL_DESIRED_STATE, desiredState));
         }

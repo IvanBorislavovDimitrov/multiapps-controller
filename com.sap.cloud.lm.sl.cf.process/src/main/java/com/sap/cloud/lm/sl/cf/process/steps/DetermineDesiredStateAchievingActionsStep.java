@@ -8,20 +8,25 @@ import org.cloudfoundry.client.lib.CloudControllerException;
 import org.cloudfoundry.client.lib.CloudOperationException;
 import org.cloudfoundry.client.lib.domain.CloudApplication;
 import org.flowable.engine.delegate.DelegateExecution;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
 import com.sap.cloud.lm.sl.cf.client.lib.domain.CloudApplicationExtended;
 import com.sap.cloud.lm.sl.cf.client.lib.domain.RestartParameters;
+import com.sap.cloud.lm.sl.cf.core.cf.PlatformType;
 import com.sap.cloud.lm.sl.cf.core.cf.apps.ActionCalculator;
 import com.sap.cloud.lm.sl.cf.core.cf.apps.ApplicationStartupState;
 import com.sap.cloud.lm.sl.cf.core.cf.apps.ApplicationStartupStateCalculator;
 import com.sap.cloud.lm.sl.cf.core.cf.apps.ApplicationStateAction;
 import com.sap.cloud.lm.sl.cf.core.cf.apps.ChangedApplicationActionCalcultor;
 import com.sap.cloud.lm.sl.cf.core.cf.apps.UnchangedApplicationActionCalculator;
+import com.sap.cloud.lm.sl.cf.core.util.ApplicationConfiguration;
 import com.sap.cloud.lm.sl.cf.process.Constants;
 import com.sap.cloud.lm.sl.cf.process.message.Messages;
+import com.sap.cloud.lm.sl.cf.process.util.ApplicationStager;
+import com.sap.cloud.lm.sl.cf.process.util.ApplicationStagerFactory;
 import com.sap.cloud.lm.sl.common.SLException;
 
 @Component("determineDesiredStateAchievingActionsStep")
@@ -30,9 +35,13 @@ public class DetermineDesiredStateAchievingActionsStep extends SyncFlowableStep 
 
     protected Supplier<ApplicationStartupStateCalculator> appStateCalculatorSupplier = ApplicationStartupStateCalculator::new;
 
+    @Autowired
+    protected ApplicationConfiguration configuration;
+
     @Override
     protected StepPhase executeStep(ExecutionWrapper context) {
         CloudApplication app = StepsUtil.getApp(context.getContext());
+
         try {
             return attemptToExecuteStep(context);
         } catch (CloudOperationException coe) {
@@ -46,24 +55,39 @@ public class DetermineDesiredStateAchievingActionsStep extends SyncFlowableStep 
     }
 
     private StepPhase attemptToExecuteStep(ExecutionWrapper execution) {
-        CloudApplication app = StepsUtil.getApp(execution.getContext());
-        ApplicationStartupState currentState = computeCurrentState(execution, app);
-        getStepLogger().debug(Messages.CURRENT_STATE, app.getName(), currentState);
+        String appName = StepsUtil.getApp(execution.getContext())
+            .getName();
+        CloudControllerClient client = execution.getControllerClient();
+        CloudApplication app = client.getApplication(appName);
+        ApplicationStartupState currentState = computeCurrentState(app);
+        getStepLogger().debug(Messages.CURRENT_STATE, appName, currentState);
         ApplicationStartupState desiredState = computeDesiredState(execution.getContext(), app);
-        getStepLogger().debug(Messages.DESIRED_STATE, app.getName(), desiredState);
+        getStepLogger().debug(Messages.DESIRED_STATE, appName, desiredState);
 
         Set<ApplicationStateAction> actionsToExecute = getActionsCalculator(execution.getContext()).determineActionsToExecute(currentState,
             desiredState);
-        getStepLogger().debug(Messages.ACTIONS_TO_EXECUTE, app.getName(), actionsToExecute);
+        addStageActionIfNeeded(execution, app, actionsToExecute);
+        getStepLogger().debug(Messages.ACTIONS_TO_EXECUTE, appName, actionsToExecute);
 
         StepsUtil.setAppStateActionsToExecute(execution.getContext(), actionsToExecute);
         return StepPhase.DONE;
     }
 
-    private ApplicationStartupState computeCurrentState(ExecutionWrapper execution, CloudApplication app) {
-        CloudControllerClient client = execution.getControllerClient();
+    private void addStageActionIfNeeded(ExecutionWrapper execution, CloudApplication cloudApplication,
+        Set<ApplicationStateAction> actionsToExecute) {
+        PlatformType platformType = configuration.getPlatformType();
+        ApplicationStager applicationStager = ApplicationStagerFactory.createApplicationStager(platformType);
+        if (!actionsToExecute.contains(ApplicationStateAction.STAGE)
+            && !applicationStager.isApplicationStagedCorrectly(execution, cloudApplication)) {
+            execution.getStepLogger()
+                .info(Messages.APPLICATION_NOT_STAGED_CORRECTLY, cloudApplication.getName());
+            actionsToExecute.add(ApplicationStateAction.STAGE);
+        }
+    }
+
+    private ApplicationStartupState computeCurrentState(CloudApplication app) {
         return appStateCalculatorSupplier.get()
-            .computeCurrentState(client.getApplication(app.getName()));
+            .computeCurrentState(app);
     }
 
     private ApplicationStartupState computeDesiredState(DelegateExecution context, CloudApplication app) {
