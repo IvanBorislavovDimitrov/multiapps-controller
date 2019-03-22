@@ -1,46 +1,29 @@
 package com.sap.cloud.lm.sl.cf.process.steps;
 
 import static org.junit.Assert.assertEquals;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Mockito.when;
 
 import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.cloudfoundry.client.lib.domain.CloudBuild;
-import org.cloudfoundry.client.lib.domain.CloudEntity;
-import org.cloudfoundry.client.lib.domain.CloudEntity.Meta;
-import org.junit.Before;
+import org.cloudfoundry.client.lib.domain.CloudBuild.BuildState;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
-import org.mockito.Mock;
 
-import com.sap.cloud.lm.sl.cf.client.lib.domain.CloudApplicationExtended;
 import com.sap.cloud.lm.sl.cf.client.lib.domain.RestartParameters;
-import com.sap.cloud.lm.sl.cf.core.cf.PlatformType;
 import com.sap.cloud.lm.sl.cf.core.cf.apps.ApplicationStartupState;
-import com.sap.cloud.lm.sl.cf.core.cf.apps.ApplicationStartupStateCalculator;
 import com.sap.cloud.lm.sl.cf.core.cf.apps.ApplicationStateAction;
-import com.sap.cloud.lm.sl.cf.core.util.ApplicationConfiguration;
 import com.sap.cloud.lm.sl.cf.process.Constants;
-import com.sap.cloud.lm.sl.common.util.JsonUtil;
 
 @RunWith(Parameterized.class)
-public class DetermineDesiredStateAchievingActionsStepTest extends SyncFlowableStepTest<DetermineDesiredStateAchievingActionsStep> {
-
-    private static final String FAKE_ERROR = "Fake Error";
-    private static final UUID FAKE_UUID = UUID.fromString("3e31fdaa-4a4e-11e9-8646-d663bd873d93");
-    private static final String DUMMY = "dummy";
+public class DetermineDesiredStateAchievingActionsStepTest extends DetermineDesiredStateAchievingActionsStepBaseTest {
 
     @Parameters
     public static List<Object[]> getParameters() throws ParseException {
@@ -48,153 +31,390 @@ public class DetermineDesiredStateAchievingActionsStepTest extends SyncFlowableS
             // @formatter:off
             // (0)
             {
-                ApplicationStartupState.STOPPED, true, true, true, ApplicationStartupState.STOPPED, false, false, false, false, Collections.emptySet(), Arrays.asList(new CloudBuild.Builder().buildState(CloudBuild.BuildState.STAGED).meta(new Meta(FAKE_UUID, new SimpleDateFormat("dd-MM-yyyy").parse("20-03-2019"), null)).droplet(new CloudBuild.Droplet(FAKE_UUID, null)).build(), new CloudBuild.Builder().buildState(CloudBuild.BuildState.FAILED).meta(new Meta(FAKE_UUID, new SimpleDateFormat("dd-MM-yyyy").parse("18-03-2019"), null)).build()),
+                ApplicationStartupState.STOPPED, ApplicationStartupState.STOPPED, false, Stream.of(ApplicationStateAction.STAGE).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), FAKE_ERROR)), null
             },
             // (1)
             {
-                ApplicationStartupState.STOPPED, true, true, true, ApplicationStartupState.STARTED, false, true, true, true, new HashSet<>(Arrays.asList(ApplicationStateAction.STAGE, ApplicationStateAction.START)), Collections.emptyList(),
+                ApplicationStartupState.STOPPED, ApplicationStartupState.STOPPED, false, Collections.emptySet(), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("18-03-2018"), null)), null
             },
             // (2)
             {
-                ApplicationStartupState.STARTED, true, true, true, ApplicationStartupState.STOPPED, false, false, false, false, new HashSet<>(Arrays.asList(ApplicationStateAction.STOP, ApplicationStateAction.STAGE)), Arrays.asList(new CloudBuild.Builder().buildState(CloudBuild.BuildState.FAILED).error(FAKE_ERROR).meta(new Meta(FAKE_UUID, new SimpleDateFormat("dd-MM-yyyy").parse("20-03-2019"), null)).build()),
+                ApplicationStartupState.STOPPED, ApplicationStartupState.STOPPED, true, Stream.of(ApplicationStateAction.STAGE).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), FAKE_ERROR)), null
             },
             // (3)
             {
-                ApplicationStartupState.STARTED, true, true, true, ApplicationStartupState.STARTED, false, false, false, false, Collections.emptySet(), Arrays.asList(new CloudBuild.Builder().buildState(CloudBuild.BuildState.STAGED).droplet(new CloudBuild.Droplet(FAKE_UUID, null)).meta(new Meta(FAKE_UUID, new SimpleDateFormat("dd-MM-yyyy").parse("20-03-2019"), null)).build()),
+                ApplicationStartupState.STOPPED, ApplicationStartupState.STOPPED, true, Stream.of(ApplicationStateAction.STAGE).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("18-03-2018"), FAKE_ERROR)), null
             },
             // (4)
             {
-                ApplicationStartupState.INCONSISTENT, true, true, true, ApplicationStartupState.STOPPED, false, false, false, false, new HashSet<>(Arrays.asList(ApplicationStateAction.STOP)), Arrays.asList(new CloudBuild.Builder().buildState(CloudBuild.BuildState.STAGED).meta(new Meta(FAKE_UUID, new SimpleDateFormat("dd-MM-yyyy").parse("20-03-2019"), null)).droplet(new CloudBuild.Droplet(FAKE_UUID, null)).build()),
+                ApplicationStartupState.STOPPED, ApplicationStartupState.STARTED, false, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.START).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), FAKE_ERROR)), null
             },
             // (5)
             {
-                ApplicationStartupState.INCONSISTENT, true, true, true, ApplicationStartupState.STARTED, false, true, true, true, new HashSet<>(Arrays.asList(ApplicationStateAction.STOP, ApplicationStateAction.STAGE, ApplicationStateAction.START)), Arrays.asList(new CloudBuild.Builder().buildState(CloudBuild.BuildState.STAGED).meta(new Meta(FAKE_UUID, new SimpleDateFormat("dd-MM-yyyy").parse("20-03-2019"), null)).droplet(new CloudBuild.Droplet(FAKE_UUID, null)).build()),
+                ApplicationStartupState.STOPPED, ApplicationStartupState.STARTED, false, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.START).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), null
             },
             // (6)
             {
-                ApplicationStartupState.STOPPED, true, true, true, ApplicationStartupState.STOPPED, true, true, true, true, new HashSet<>(Arrays.asList(ApplicationStateAction.STAGE)), Arrays.asList(new CloudBuild.Builder().buildState(CloudBuild.BuildState.STAGED).droplet(new CloudBuild.Droplet(FAKE_UUID, null)).meta(new Meta(FAKE_UUID, new SimpleDateFormat("dd-MM-yyyy").parse("20-03-2019"), null)).build()),
+                ApplicationStartupState.STOPPED, ApplicationStartupState.STARTED, true, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.START).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), FAKE_ERROR)), null
             },
             // (7)
             {
-                ApplicationStartupState.STOPPED, true, true, true, ApplicationStartupState.STARTED, true, true, true, true, new HashSet<>(Arrays.asList(ApplicationStateAction.STAGE, ApplicationStateAction.START)), Arrays.asList(new CloudBuild.Builder().buildState(CloudBuild.BuildState.STAGED).meta(new Meta(FAKE_UUID, new SimpleDateFormat("dd-MM-yyyy").parse("20-03-2019"), null)).droplet(new CloudBuild.Droplet(FAKE_UUID, null)).build()),
+                ApplicationStartupState.STOPPED, ApplicationStartupState.STARTED, true, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.START).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), null
             },
             // (8)
             {
-                ApplicationStartupState.STARTED, true, true, true, ApplicationStartupState.STOPPED, true, true, true, true, new HashSet<>(Arrays.asList(ApplicationStateAction.STOP, ApplicationStateAction.STAGE)), Arrays.asList(new CloudBuild.Builder().buildState(CloudBuild.BuildState.STAGED).meta(new Meta(FAKE_UUID, new SimpleDateFormat("dd-MM-yyyy").parse("20-03-2019"), null)).droplet(new CloudBuild.Droplet(FAKE_UUID, null)).build()),
+                ApplicationStartupState.STOPPED, ApplicationStartupState.INCONSISTENT, false, Stream.of(ApplicationStateAction.STAGE).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), FAKE_ERROR)), IllegalStateException.class
             },
             // (9)
             {
-                ApplicationStartupState.STARTED, true, true, true, ApplicationStartupState.STARTED, true, true, true, true, new HashSet<>(Arrays.asList(ApplicationStateAction.STOP, ApplicationStateAction.STAGE, ApplicationStateAction.START)), Arrays.asList(new CloudBuild.Builder().buildState(CloudBuild.BuildState.STAGED).meta(new Meta(FAKE_UUID, new SimpleDateFormat("dd-MM-yyyy").parse("20-03-2019"), null)).droplet(new CloudBuild.Droplet(FAKE_UUID, null)).build()),
+                ApplicationStartupState.STOPPED, ApplicationStartupState.INCONSISTENT, false, Stream.of(ApplicationStateAction.STAGE).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), IllegalStateException.class
             },
             // (10)
             {
-                ApplicationStartupState.INCONSISTENT, true, true, true, ApplicationStartupState.STOPPED, true, true, true, true, new HashSet<>(Arrays.asList(ApplicationStateAction.STOP, ApplicationStateAction.STAGE)), Arrays.asList(new CloudBuild.Builder().buildState(CloudBuild.BuildState.FAILED).meta(new Meta(FAKE_UUID, new SimpleDateFormat("dd-MM-yyyy").parse("20-03-2019"), null)).droplet(new CloudBuild.Droplet(FAKE_UUID, null)).build()),
+                ApplicationStartupState.STOPPED, ApplicationStartupState.INCONSISTENT, true, Stream.of(ApplicationStateAction.STAGE).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), FAKE_ERROR)), null
             },
             // (11)
             {
-                ApplicationStartupState.INCONSISTENT, true, true, true, ApplicationStartupState.STARTED, true, true, true, true, new HashSet<>(Arrays.asList(ApplicationStateAction.STOP, ApplicationStateAction.STAGE, ApplicationStateAction.START)), Arrays.asList(new CloudBuild.Builder().buildState(CloudBuild.BuildState.STAGED).meta(new Meta(FAKE_UUID, new SimpleDateFormat("dd-MM-yyyy").parse("20-03-2019"), null)).droplet(new CloudBuild.Droplet(FAKE_UUID, null)).build()),
+                ApplicationStartupState.STOPPED, ApplicationStartupState.INCONSISTENT, true, Stream.of(ApplicationStateAction.STAGE).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), null
             },
             // (12)
             {
-                ApplicationStartupState.EXECUTED, true, true, true, ApplicationStartupState.EXECUTED, false, false, false, false, Collections.emptySet(), Arrays.asList(new CloudBuild.Builder().buildState(CloudBuild.BuildState.STAGED).droplet(new CloudBuild.Droplet(FAKE_UUID, null)).meta(new Meta(FAKE_UUID, new SimpleDateFormat("dd-MM-yyyy").parse("20-03-2019"), null)).build()),
+                ApplicationStartupState.STOPPED, ApplicationStartupState.EXECUTED, false, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.START, ApplicationStateAction.EXECUTE).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), FAKE_ERROR)), null
             },
             // (13)
             {
-                ApplicationStartupState.EXECUTED, true, true, true, ApplicationStartupState.STOPPED, false, false, false, false, new HashSet<>(Arrays.asList(ApplicationStateAction.STAGE)), Collections.emptyList(),
+                ApplicationStartupState.STOPPED, ApplicationStartupState.EXECUTED, false, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.START, ApplicationStateAction.EXECUTE).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), null
             },
             // (14)
             {
-                ApplicationStartupState.EXECUTED, true, true, true, ApplicationStartupState.STARTED, false, false, false, false, new HashSet<>(Arrays.asList(ApplicationStateAction.STAGE, ApplicationStateAction.START)), Collections.emptyList(),
+                ApplicationStartupState.STOPPED, ApplicationStartupState.EXECUTED, true, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.START, ApplicationStateAction.EXECUTE).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), FAKE_ERROR)), null
             },
             // (15)
             {
-                ApplicationStartupState.STARTED, false, true, true, ApplicationStartupState.STARTED, false, false, true, true, new HashSet<>(Arrays.asList(ApplicationStateAction.STOP, ApplicationStateAction.STAGE, ApplicationStateAction.START)), Collections.emptyList(),
+                ApplicationStartupState.STOPPED, ApplicationStartupState.EXECUTED, true, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.START, ApplicationStateAction.EXECUTE).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), null
             },
             // (16)
             {
-                ApplicationStartupState.STARTED, false, false, false, ApplicationStartupState.STARTED, false, true, true, true, Collections.emptySet(), Arrays.asList(new CloudBuild.Builder().buildState(CloudBuild.BuildState.STAGED).droplet(new CloudBuild.Droplet(FAKE_UUID, null)).meta(new Meta(FAKE_UUID, new SimpleDateFormat("dd-MM-yyyy").parse("20-03-2019"), null)).build()),
+                ApplicationStartupState.STARTED, ApplicationStartupState.STOPPED, false, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.STOP).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), FAKE_ERROR)), null
             },
             // (17)
             {
-                ApplicationStartupState.STARTED, false, false, false, ApplicationStartupState.STARTED, true, true, true, true, new HashSet<>(Arrays.asList(ApplicationStateAction.STOP, ApplicationStateAction.STAGE, ApplicationStateAction.START)), Arrays.asList(new CloudBuild.Builder().meta(new Meta(FAKE_UUID, new SimpleDateFormat("dd-MM-yyyy").parse("20-03-2019"), null)).buildState(CloudBuild.BuildState.STAGED).droplet(new CloudBuild.Droplet(FAKE_UUID, null)).build()),
+                ApplicationStartupState.STARTED, ApplicationStartupState.STOPPED, false, Stream.of(ApplicationStateAction.STOP).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), null
             },
             // (18)
             {
-                ApplicationStartupState.STARTED, false, true, false, ApplicationStartupState.STARTED, false, false, true, false, new HashSet<>(Arrays.asList(ApplicationStateAction.STOP, ApplicationStateAction.STAGE, ApplicationStateAction.START)), Arrays.asList(new CloudBuild.Builder().meta(new Meta(FAKE_UUID, new SimpleDateFormat("dd-MM-yyyy").parse("20-03-2019"), null)).buildState(CloudBuild.BuildState.STAGED).droplet(new CloudBuild.Droplet(FAKE_UUID, null)).build()),
+                ApplicationStartupState.STARTED, ApplicationStartupState.STOPPED, true, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.STOP).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), FAKE_ERROR)), null
             },
             // (19)
             {
-                ApplicationStartupState.STARTED, false, false, true, ApplicationStartupState.STARTED, false, false, false, true, new HashSet<>(Arrays.asList(ApplicationStateAction.STOP, ApplicationStateAction.STAGE, ApplicationStateAction.START)), Arrays.asList(new CloudBuild.Builder().meta(new Meta(FAKE_UUID, new SimpleDateFormat("dd-MM-yyyy").parse("20-03-2019"), null)).buildState(CloudBuild.BuildState.STAGED).droplet(new CloudBuild.Droplet(FAKE_UUID, null)).build()),
-            }
-            // @formatter:on
+                ApplicationStartupState.STARTED, ApplicationStartupState.STOPPED, true, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.STOP).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), null
+            },
+            // (20)
+            {
+                ApplicationStartupState.STARTED, ApplicationStartupState.STARTED, false, Stream.of(ApplicationStateAction.STAGE).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), FAKE_ERROR)), null
+            },
+            // (21)
+            {
+                ApplicationStartupState.STARTED, ApplicationStartupState.STARTED, false, Collections.emptySet(), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), null
+            },
+            // (22)
+            {
+                ApplicationStartupState.STARTED, ApplicationStartupState.STARTED, true, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.START, ApplicationStateAction.STOP).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), FAKE_ERROR)), null
+            },
+            // (23)
+            {
+                ApplicationStartupState.STARTED, ApplicationStartupState.STARTED, true, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.START, ApplicationStateAction.STOP).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), null
+            },
+            // (24)
+            {
+                ApplicationStartupState.STARTED, ApplicationStartupState.INCONSISTENT, false, Stream.of(ApplicationStateAction.STAGE).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), FAKE_ERROR)), IllegalStateException.class
+            },
+            // (25)
+            {
+                ApplicationStartupState.STARTED, ApplicationStartupState.INCONSISTENT, false, Collections.emptySet(), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), IllegalStateException.class
+            },
+            // (26)
+            {
+                ApplicationStartupState.STARTED, ApplicationStartupState.INCONSISTENT, true, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.STOP).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), FAKE_ERROR)), null
+            },
+            // (27)
+            {
+                ApplicationStartupState.STARTED, ApplicationStartupState.INCONSISTENT, true, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.STOP).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), FAKE_ERROR)), null
+            },
+            // (28)
+            {
+                ApplicationStartupState.STARTED, ApplicationStartupState.EXECUTED, false, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.STOP).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), FAKE_ERROR)), null
+            },
+            // (29)
+            {
+                ApplicationStartupState.STARTED, ApplicationStartupState.EXECUTED, false, Stream.of(ApplicationStateAction.STOP).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), null
+            },
+            // (30)
+            {
+                ApplicationStartupState.STARTED, ApplicationStartupState.EXECUTED, true, Stream.of(ApplicationStateAction.STOP, ApplicationStateAction.STAGE, ApplicationStateAction.EXECUTE, ApplicationStateAction.START).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), FAKE_ERROR)), null
+            },
+            // (31)
+            {
+                ApplicationStartupState.STARTED, ApplicationStartupState.EXECUTED, true, Stream.of(ApplicationStateAction.STOP, ApplicationStateAction.STAGE, ApplicationStateAction.EXECUTE, ApplicationStateAction.START).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), null
+            },
+            // (32)
+            {
+                ApplicationStartupState.INCONSISTENT, ApplicationStartupState.STOPPED, false, Stream.of(ApplicationStateAction.STOP, ApplicationStateAction.STAGE).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), FAKE_ERROR)), null
+            },
+            // (33)
+            {
+                ApplicationStartupState.INCONSISTENT, ApplicationStartupState.STOPPED, false, Stream.of(ApplicationStateAction.STOP).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), null
+            },
+            // (34)
+            {
+                ApplicationStartupState.INCONSISTENT, ApplicationStartupState.STOPPED, true, Stream.of(ApplicationStateAction.STOP, ApplicationStateAction.STAGE).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), FAKE_ERROR)), null
+            },
+            // (35)
+            {
+                ApplicationStartupState.INCONSISTENT, ApplicationStartupState.STOPPED, true, Stream.of(ApplicationStateAction.STOP, ApplicationStateAction.STAGE).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), null
+            },
+            // (36)
+            {
+                ApplicationStartupState.INCONSISTENT, ApplicationStartupState.STARTED, false, Stream.of(ApplicationStateAction.STOP, ApplicationStateAction.STAGE, ApplicationStateAction.START).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), null)), null
+            },
+            // (37)
+            {
+                ApplicationStartupState.INCONSISTENT, ApplicationStartupState.STARTED, false, Stream.of(ApplicationStateAction.STOP, ApplicationStateAction.STAGE, ApplicationStateAction.START).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), null
+            },
+            // (38)
+            {
+                ApplicationStartupState.INCONSISTENT, ApplicationStartupState.STARTED, true, Stream.of(ApplicationStateAction.STOP, ApplicationStateAction.STAGE, ApplicationStateAction.START).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), null)), null
+            },
+            // (39)
+            {
+                ApplicationStartupState.INCONSISTENT, ApplicationStartupState.STARTED, true, Stream.of(ApplicationStateAction.STOP, ApplicationStateAction.STAGE, ApplicationStateAction.START).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), null
+            },
+            // (40)
+            {
+                ApplicationStartupState.INCONSISTENT, ApplicationStartupState.INCONSISTENT, false, Stream.of(ApplicationStateAction.STAGE).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), null)), null
+            },
+            // (41)
+            {
+                ApplicationStartupState.INCONSISTENT, ApplicationStartupState.INCONSISTENT, false, Collections.emptySet(), Arrays.asList(createCloudBuild(BuildState.STAGED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), null
+            },
+            // (42)
+            {
+                ApplicationStartupState.INCONSISTENT, ApplicationStartupState.INCONSISTENT, true, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.STOP).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), null
+            },
+            // (43)
+            {
+                ApplicationStartupState.INCONSISTENT, ApplicationStartupState.INCONSISTENT, true, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.STOP).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), null)), null
+            },
+            // (44)
+            {
+                ApplicationStartupState.INCONSISTENT, ApplicationStartupState.EXECUTED, false, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.EXECUTE, ApplicationStateAction.START).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), null)), null
+            },
+            // (45)
+            {
+                ApplicationStartupState.INCONSISTENT, ApplicationStartupState.EXECUTED, false, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.EXECUTE, ApplicationStateAction.START).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), null
+            },
+            // (46)
+            {
+                ApplicationStartupState.INCONSISTENT, ApplicationStartupState.EXECUTED, true, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.EXECUTE, ApplicationStateAction.START, ApplicationStateAction.STOP).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), null)), null
+            },
+            // (47)
+            {
+                ApplicationStartupState.INCONSISTENT, ApplicationStartupState.EXECUTED, true, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.EXECUTE, ApplicationStateAction.START, ApplicationStateAction.STOP).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), null
+            },
+            // (48)
+            {
+                ApplicationStartupState.EXECUTED, ApplicationStartupState.STOPPED, false, Stream.of(ApplicationStateAction.STAGE).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), null)), null
+            },
+            // (49)
+            {
+                ApplicationStartupState.EXECUTED, ApplicationStartupState.STOPPED, false, Collections.emptySet(), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), null
+            },
+            // (50)
+            {
+                ApplicationStartupState.EXECUTED, ApplicationStartupState.STOPPED, true, Stream.of(ApplicationStateAction.STAGE).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), null)), null
+            },
+            // (51)
+            {
+                ApplicationStartupState.EXECUTED, ApplicationStartupState.STOPPED, true, Stream.of(ApplicationStateAction.STAGE).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), null
+            },
+            // (52)
+            {
+                ApplicationStartupState.EXECUTED, ApplicationStartupState.STARTED, false, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.START).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), null)), null
+            },
+            // (53)
+            {
+                ApplicationStartupState.EXECUTED, ApplicationStartupState.STARTED, false, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.START).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), null
+            },
+            // (54)
+            {
+                ApplicationStartupState.EXECUTED, ApplicationStartupState.STARTED, true, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.START).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), null)), null
+            },
+            // (55)
+            {
+                ApplicationStartupState.EXECUTED, ApplicationStartupState.STARTED, true, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.START).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), null
+            },
+            // (56)
+            {
+                ApplicationStartupState.EXECUTED, ApplicationStartupState.INCONSISTENT, false, Collections.emptySet(), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), null)), IllegalStateException.class
+            },
+            // (57)
+            {
+                ApplicationStartupState.EXECUTED, ApplicationStartupState.INCONSISTENT, false, Collections.emptySet(), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), IllegalStateException.class
+            },
+            // (58)
+            {
+                ApplicationStartupState.EXECUTED, ApplicationStartupState.INCONSISTENT, true, Stream.of(ApplicationStateAction.STAGE).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), null)), null
+            },
+            // (59)
+            {
+                ApplicationStartupState.EXECUTED, ApplicationStartupState.INCONSISTENT, true, Stream.of(ApplicationStateAction.STAGE).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), null
+            },
+            // (60)
+            {
+                ApplicationStartupState.EXECUTED, ApplicationStartupState.EXECUTED, false, Stream.of(ApplicationStateAction.STAGE).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), null)), null
+            },
+            // (61)
+            {
+                ApplicationStartupState.EXECUTED, ApplicationStartupState.EXECUTED, false, Collections.emptySet(), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), null
+            },
+            // (62)
+            {
+                ApplicationStartupState.EXECUTED, ApplicationStartupState.EXECUTED, true, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.START, ApplicationStateAction.EXECUTE).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.FAILED, parseDate("21-03-2018"), null)), null
+            },
+            // (63)
+            {
+                ApplicationStartupState.EXECUTED, ApplicationStartupState.EXECUTED, true, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.START, ApplicationStateAction.EXECUTE).collect(Collectors.toSet()), Arrays.asList(createCloudBuild(BuildState.FAILED, parseDate("20-03-2018"), null), createCloudBuild(BuildState.STAGED, parseDate("21-03-2018"), null)), null
+            },
         });
-    }
+    } 
 
-    private final ApplicationStartupState currentAppState;
-    private final ApplicationStartupState desiredAppState;
-    private final boolean hasAppChanged;
-    private final boolean hasAppPropertiesChanged;
-    private final boolean hasServicesPropertiesChanged;
-    private final boolean hasUserPropertiesChanged;
-    private final Set<ApplicationStateAction> expectedAppStateActions;
-    private final List<CloudBuild> cloudBuilds;
-    private RestartParameters appRestartParameters;
+    private final Class<? extends Exception> exception;
 
-    @Mock
-    private ApplicationStartupStateCalculator appStateCalculator;
-
-    @Mock
-    private ApplicationConfiguration configuration;
-
-    public DetermineDesiredStateAchievingActionsStepTest(ApplicationStartupState currentAppState, boolean shouldRestartOnVcapAppChange,
-        boolean shouldRestartOnVcapServicesChange, boolean shouldRestartOnUserProvidedChange, ApplicationStartupState desiredAppState,
-        boolean hasAppChanged, boolean hasAppPropertiesChanged, boolean hasServicesPropertiesChanged, boolean hasUserPropertiesChanged,
-        Set<ApplicationStateAction> expectedAppStateActions, List<CloudBuild> cloudBuilds) {
-        this.currentAppState = currentAppState;
-        this.appRestartParameters = new RestartParameters(shouldRestartOnVcapAppChange, shouldRestartOnVcapServicesChange,
-            shouldRestartOnUserProvidedChange);
-        this.desiredAppState = desiredAppState;
-        this.hasAppChanged = hasAppChanged;
-        this.hasAppPropertiesChanged = hasAppPropertiesChanged;
-        this.hasServicesPropertiesChanged = hasServicesPropertiesChanged;
-        this.hasUserPropertiesChanged = hasUserPropertiesChanged;
-        this.expectedAppStateActions = expectedAppStateActions;
-        this.cloudBuilds = cloudBuilds;
-    }
-
-    @Before
-    public void setUp() {
-        context.setVariable(Constants.VAR_APP_CONTENT_CHANGED, Boolean.toString(hasAppChanged));
-        context.setVariable(Constants.VAR_VCAP_APP_PROPERTIES_CHANGED, hasAppPropertiesChanged);
-        context.setVariable(Constants.VAR_VCAP_SERVICES_PROPERTIES_CHANGED, hasServicesPropertiesChanged);
-        context.setVariable(Constants.VAR_USER_PROPERTIES_CHANGED, hasUserPropertiesChanged);
-        context.setVariable(Constants.PARAM_NO_START, false);
-        when(configuration.getPlatformType()).thenReturn(PlatformType.CF);
-        when(appStateCalculator.computeCurrentState(any())).thenReturn(currentAppState);
-        when(appStateCalculator.computeDesiredState(any(), eq(false))).thenReturn(desiredAppState);
-        step.appStateCalculatorSupplier = () -> appStateCalculator;
-        step.configuration = configuration;
-        CloudEntity.Meta meta = new CloudEntity.Meta(FAKE_UUID, null, null);
-        CloudApplicationExtended app = new CloudApplicationExtended(meta, DUMMY);
-        app.setRestartParameters(appRestartParameters);
-        context.setVariable(Constants.VAR_APP_TO_DEPLOY, JsonUtil.toJson(app));
-        when(client.getApplication(anyString())).thenReturn(app);
-        when(client.getBuildsForApplication(app.getMeta()
-            .getGuid())).thenReturn(cloudBuilds);
+    public DetermineDesiredStateAchievingActionsStepTest(ApplicationStartupState currentAppState, ApplicationStartupState desiredAppState,
+        boolean hasAppChanged, Set<ApplicationStateAction> expectedAppStateActions, List<CloudBuild> cloudBuilds,
+        Class<? extends Exception> exception) {
+        super(currentAppState, desiredAppState, hasAppChanged, expectedAppStateActions, cloudBuilds);
+        this.exception = exception;
     }
 
     @Test
     public void testExecute() throws Exception {
+        if (exception != null) {
+            expectedException.expect(exception);
+        }
         step.execute(context);
-
         assertStepFinishedSuccessfully();
 
         assertEquals(expectedAppStateActions, StepsUtil.getAppStateActionsToExecute(context));
     }
 
     @Override
-    protected DetermineDesiredStateAchievingActionsStep createStep() {
-        return new DetermineDesiredStateAchievingActionsStep();
+    protected void initProperties() {
+        context.setVariable(Constants.VAR_VCAP_APP_PROPERTIES_CHANGED, false);
+        context.setVariable(Constants.VAR_VCAP_SERVICES_PROPERTIES_CHANGED, false);
+        context.setVariable(Constants.VAR_USER_PROPERTIES_CHANGED, false);        
     }
 
+    @Override
+    protected RestartParameters getRestartParameters() {
+        return new RestartParameters(false, false, false);
+    }
+
+    @RunWith(Parameterized.class)
+    public static class DetermineAppRestartTest extends DetermineDesiredStateAchievingActionsStepBaseTest {
+
+        // Staging is always required, because there are no previous builds
+        @Parameters
+        public static List<Object[]> getParameters() throws ParseException {
+            return Arrays.asList(new Object[][] {
+                // @formatter:off
+                // (0)
+                {
+                    ApplicationStartupState.STARTED, ApplicationStartupState.STARTED, false, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.START, ApplicationStateAction.STOP).collect(Collectors.toSet()), Collections.emptyList(), true, true, true, true, true, true
+                },
+                // (1)
+                {
+                    ApplicationStartupState.STARTED, ApplicationStartupState.STARTED, false, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.START, ApplicationStateAction.STOP).collect(Collectors.toSet()), Collections.emptyList(), true, false, false, true, false, false
+                },
+                // (2)
+                {
+                    ApplicationStartupState.STARTED, ApplicationStartupState.STARTED, false, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.START, ApplicationStateAction.STOP).collect(Collectors.toSet()), Collections.emptyList(), false, true, false, false, true, false
+                },
+                // (3)
+                {
+                    ApplicationStartupState.STARTED, ApplicationStartupState.STARTED, false, Stream.of(ApplicationStateAction.STAGE, ApplicationStateAction.START, ApplicationStateAction.STOP).collect(Collectors.toSet()), Collections.emptyList(), false, false, true, false, false, true
+                },
+                // (4)
+                {
+                    ApplicationStartupState.STARTED, ApplicationStartupState.STARTED, false, Stream.of(ApplicationStateAction.STAGE).collect(Collectors.toSet()), Collections.emptyList(), false, false, false, false, false, false
+                },
+                // (5)
+                {
+                    ApplicationStartupState.STARTED, ApplicationStartupState.STARTED, false, Stream.of(ApplicationStateAction.STAGE).collect(Collectors.toSet()), Collections.emptyList(), true, false, false, false, false, false
+                },
+                // (6)
+                {
+                    ApplicationStartupState.STARTED, ApplicationStartupState.STARTED, false, Stream.of(ApplicationStateAction.STAGE).collect(Collectors.toSet()), Collections.emptyList(), false, true, false, false, false, false
+                },
+                // (7)
+                {
+                    ApplicationStartupState.STARTED, ApplicationStartupState.STARTED, false, Stream.of(ApplicationStateAction.STAGE).collect(Collectors.toSet()), Collections.emptyList(), false, false, true, false, false, false
+                },
+                // (8)
+                {
+                    ApplicationStartupState.STARTED, ApplicationStartupState.STARTED, false, Stream.of(ApplicationStateAction.STAGE).collect(Collectors.toSet()), Collections.emptyList(), false, false, false, true, false, false
+                },
+                // (9)
+                {
+                    ApplicationStartupState.STARTED, ApplicationStartupState.STARTED, false, Stream.of(ApplicationStateAction.STAGE).collect(Collectors.toSet()), Collections.emptyList(), false, false, false, false, true, false
+                },
+                // (10)
+                {
+                    ApplicationStartupState.STARTED, ApplicationStartupState.STARTED, false, Stream.of(ApplicationStateAction.STAGE).collect(Collectors.toSet()), Collections.emptyList(), false, false, false, false, false, true
+                },
+            });
+        }
+
+        private boolean vcapPropertiesChanged;
+        private boolean vcapServicesChanged;
+        private boolean userPropertiesChanged;
+        private boolean shouldRestartOnVcapAppChange;
+        private boolean shouldRestartOnVcapServicesChange;
+        private boolean shouldRestartOnUserProvidedChange;
+
+        public DetermineAppRestartTest(ApplicationStartupState currentAppState, ApplicationStartupState desiredAppState,
+            boolean hasAppChanged, Set<ApplicationStateAction> expectedAppStateActions, List<CloudBuild> cloudBuilds, boolean vcapPropertiesChanged, boolean vcapServicesChanged, boolean userPropertiesChanged , boolean shouldRestartOnVcapAppChange, boolean shouldRestartOnVcapServicesChange,  boolean shouldRestartOnUserProvidedChange) {
+            super(currentAppState, desiredAppState, hasAppChanged, expectedAppStateActions, cloudBuilds);
+            this.vcapPropertiesChanged = vcapPropertiesChanged;
+            this.vcapServicesChanged = vcapServicesChanged;
+            this.userPropertiesChanged = userPropertiesChanged;
+            this.shouldRestartOnVcapAppChange = shouldRestartOnVcapAppChange;
+            this.shouldRestartOnVcapServicesChange = shouldRestartOnVcapServicesChange;
+            this.shouldRestartOnUserProvidedChange = shouldRestartOnUserProvidedChange;
+        }
+
+        @Test
+        public void testParameters() {
+            step.execute(context);
+
+            assertEquals(expectedAppStateActions, StepsUtil.getAppStateActionsToExecute(context));
+        }
+
+        @Override
+        protected DetermineDesiredStateAchievingActionsStep createStep() {
+            return new DetermineDesiredStateAchievingActionsStep();
+        }
+
+        @Override
+        protected void initProperties() {
+            context.setVariable(Constants.VAR_VCAP_APP_PROPERTIES_CHANGED, vcapPropertiesChanged);
+            context.setVariable(Constants.VAR_VCAP_SERVICES_PROPERTIES_CHANGED, vcapServicesChanged);
+            context.setVariable(Constants.VAR_USER_PROPERTIES_CHANGED, userPropertiesChanged);
+        }
+
+        @Override
+        protected RestartParameters getRestartParameters() {
+            return new RestartParameters(shouldRestartOnVcapAppChange, shouldRestartOnVcapServicesChange, shouldRestartOnUserProvidedChange);
+        }
+    }
 }
