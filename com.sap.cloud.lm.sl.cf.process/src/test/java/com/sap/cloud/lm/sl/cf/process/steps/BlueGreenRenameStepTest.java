@@ -8,6 +8,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 
+import com.sap.cloud.lm.sl.cf.core.dao.OperationDtoDao;
 import com.sap.cloud.lm.sl.cf.core.helpers.ApplicationColorDetector;
 import com.sap.cloud.lm.sl.cf.core.message.Messages;
 import com.sap.cloud.lm.sl.cf.core.model.ApplicationColor;
@@ -70,7 +71,7 @@ public class BlueGreenRenameStepTest extends SyncFlowableStepTest<BlueGreenRenam
     public void testExecute2() throws Exception {
         when(applicationColorDetector.detectSingularDeployedApplicationColor(any()))
             .thenThrow(new ConflictException(Messages.CONFLICTING_APP_COLORS));
-        when(applicationColorDetector.detectFirstDeployedApplicationColor(any())).thenReturn(ApplicationColor.GREEN);
+        when(applicationColorDetector.detectFirstDeployedApplicationColor(any(), null, null, null, null)).thenReturn(ApplicationColor.GREEN);
 
         step.execute(context);
 

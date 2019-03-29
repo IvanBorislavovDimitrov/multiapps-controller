@@ -1,18 +1,34 @@
 package com.sap.cloud.lm.sl.cf.core.helpers;
 
-import java.util.Date;
-
+import com.sap.cloud.lm.sl.cf.core.Constants;
+import com.sap.cloud.lm.sl.cf.core.dao.OperationDtoDao;
+import com.sap.cloud.lm.sl.cf.core.dao.filters.OperationFilter;
+import com.sap.cloud.lm.sl.cf.core.dto.persistence.OperationDto;
+import com.sap.cloud.lm.sl.cf.core.flowable.FlowableFacade;
 import com.sap.cloud.lm.sl.cf.core.message.Messages;
 import com.sap.cloud.lm.sl.cf.core.model.ApplicationColor;
 import com.sap.cloud.lm.sl.cf.core.model.DeployedMta;
 import com.sap.cloud.lm.sl.cf.core.model.DeployedMtaModule;
+import com.sap.cloud.lm.sl.cf.persistence.model.ProgressMessage;
+import com.sap.cloud.lm.sl.cf.persistence.model.ProgressMessage.ProgressMessageType;
+import com.sap.cloud.lm.sl.cf.persistence.services.ProgressMessageService;
 import com.sap.cloud.lm.sl.common.ConflictException;
+
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.flowable.engine.impl.context.Context;
+import org.flowable.engine.runtime.Execution;
+import org.flowable.variable.api.history.HistoricVariableInstance;
 
 public class ApplicationColorDetector {
 
     private static final ApplicationColor COLOR_OF_APPLICATIONS_WITHOUT_SUFFIX = ApplicationColor.BLUE;
 
-    public ApplicationColor detectFirstDeployedApplicationColor(DeployedMta deployedMta) {
+    public ApplicationColor detectFirstDeployedApplicationColor(DeployedMta deployedMta, OperationDtoDao operationDtoDao,
+        String correlationId, ProgressMessageService progressMessageService, FlowableFacade flowableFacade) {
         if (deployedMta == null) {
             return null;
         }
@@ -25,6 +41,49 @@ public class ApplicationColorDetector {
                 firstApplicationColor = getApplicationColor(module);
             }
         }
+
+        OperationDto currentOperationDto = operationDtoDao.find(correlationId);
+
+        int countOfUnsuccessfulUndeploys = 0;
+        OperationDto operationFirstDto = null;
+        for (OperationDto operationDto : operationDtoDao.findAll()
+            .stream()
+            .filter(op -> op.getMtaId()
+                .equals(currentOperationDto.getMtaId())
+                && !op.getProcessId()
+                    .equals(currentOperationDto.getProcessId()))
+            .sorted((o1, o2) -> o2.getEndedAt()
+                .compareTo(o1.getEndedAt()))
+            .collect(Collectors.toList())) {
+            if (operationFirstDto == null) {
+                operationFirstDto = operationDto;
+            }
+
+            List<ProgressMessage> opertaionProgressMessages = progressMessageService.findByProcessId(operationDto.getProcessId());
+            boolean errorWhileUndeploy = opertaionProgressMessages.stream()
+                .anyMatch(progressMessage -> progressMessage.getType() == ProgressMessageType.ERROR && progressMessage.getTaskId()
+                    .equals("undeployAppTask"));
+            if (!errorWhileUndeploy) {
+                break;
+            } else {
+                countOfUnsuccessfulUndeploys++;
+            }
+        }
+
+        List<Execution> executionsByProcessId = flowableFacade.getExecutionsByProcessId(operationFirstDto.getProcessId());
+        List<Execution> allProcessExecutions = flowableFacade.getAllProcessExecutions(operationFirstDto.getProcessId());
+        
+        List<HistoricVariableInstance> list = Context.getProcessEngineConfiguration()
+            .getHistoryService()
+            .createHistoricVariableInstanceQuery()
+            .processInstanceId("5994")
+            .variableName("deployedMtaColor")
+            .list();
+
+        if (countOfUnsuccessfulUndeploys % 2 != 0) {
+            firstApplicationColor = firstApplicationColor.getAlternativeColor();
+        }
+
         return firstApplicationColor;
     }
 

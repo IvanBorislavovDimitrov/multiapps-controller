@@ -40,12 +40,16 @@ public class UndeployAppStep extends SyncFlowableStep {
         try {
             CloudApplication appToUndeploy = StepsUtil.getAppToUndeploy(execution.getContext());
             CloudControllerClient client = execution.getControllerClient();
-
-            if (client.areTasksSupported()) {
+            
+             if (client.areTasksSupported()) {
                 cancelRunningTasks(appToUndeploy, client);
             }
             stopApplication(appToUndeploy, client);
             deleteApplicationRoutes(appToUndeploy, client);
+            if (true) {
+                execution.getStepLogger().info("App won't be undeployed");
+                throw new RuntimeException("ERROR");
+            }
             deleteApplication(appToUndeploy, client);
 
             getStepLogger().debug(Messages.APPS_UNDEPLOYED);

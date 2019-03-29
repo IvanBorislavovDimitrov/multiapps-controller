@@ -197,7 +197,7 @@ public class FlowableFacade {
             .orElse(null);
     }
 
-    private List<Execution> getExecutionsByProcessId(String processInstanceId) {
+    public List<Execution> getExecutionsByProcessId(String processInstanceId) {
         return processEngine.getRuntimeService()
             .createExecutionQuery()
             .rootProcessInstanceId(processInstanceId)
@@ -299,7 +299,7 @@ public class FlowableFacade {
             .collect(Collectors.toList());
     }
 
-    private List<Execution> getAllProcessExecutions(String processInstanceId) {
+    public List<Execution> getAllProcessExecutions(String processInstanceId) {
         return processEngine.getRuntimeService()
             .createExecutionQuery()
             .rootProcessInstanceId(processInstanceId)

@@ -2,16 +2,21 @@ package com.sap.cloud.lm.sl.cf.process.steps;
 
 import java.util.function.Supplier;
 
+import javax.inject.Inject;
 import javax.inject.Named;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.Scope;
 
 import com.sap.cloud.lm.sl.cf.core.cf.HandlerFactory;
+import com.sap.cloud.lm.sl.cf.core.dao.OperationDtoDao;
+import com.sap.cloud.lm.sl.cf.core.flowable.FlowableFacade;
 import com.sap.cloud.lm.sl.cf.core.helpers.ApplicationColorDetector;
 import com.sap.cloud.lm.sl.cf.core.helpers.v2.ApplicationColorAppender;
 import com.sap.cloud.lm.sl.cf.core.model.ApplicationColor;
 import com.sap.cloud.lm.sl.cf.core.model.DeployedMta;
+import com.sap.cloud.lm.sl.cf.persistence.services.ProgressMessageService;
 import com.sap.cloud.lm.sl.cf.process.message.Messages;
 import com.sap.cloud.lm.sl.common.ConflictException;
 import com.sap.cloud.lm.sl.common.SLException;
@@ -24,15 +29,24 @@ public class BlueGreenRenameStep extends SyncFlowableStep {
     private static final ApplicationColor DEFAULT_MTA_COLOR = ApplicationColor.BLUE;
 
     protected Supplier<ApplicationColorDetector> colorDetectorSupplier = ApplicationColorDetector::new;
+    
+    @Autowired
+    private FlowableFacade flowableFacade;
+
+    @Autowired
+    private OperationDtoDao operationDtoDao;
+
+    @Inject
+    private ProgressMessageService progressMessageService;
 
     @Override
     protected StepPhase executeStep(ExecutionWrapper execution) {
+
         try {
             getStepLogger().debug(Messages.DETECTING_COLOR_OF_DEPLOYED_MTA);
 
             DeploymentDescriptor descriptor = StepsUtil.getUnresolvedDeploymentDescriptor(execution.getContext());
             DeployedMta deployedMta = StepsUtil.getDeployedMta(execution.getContext());
-
             ApplicationColorDetector detector = colorDetectorSupplier.get();
             ApplicationColor mtaColor;
             ApplicationColor deployedMtaColor = null;
@@ -46,9 +60,14 @@ public class BlueGreenRenameStep extends SyncFlowableStep {
                 }
             } catch (ConflictException e) {
                 getStepLogger().warn(e.getMessage());
+                String correlationId = (String) execution.getContext()
+                    .getVariable(com.sap.cloud.lm.sl.cf.process.Constants.VAR_CORRELATION_ID);
                 // Assume that the last deployed color was not deployed successfully and try to update (fix) it in this process:
-                ApplicationColor liveMtaColor = detector.detectFirstDeployedApplicationColor(deployedMta);
+
+                ApplicationColor liveMtaColor = detector.detectFirstDeployedApplicationColor(deployedMta, operationDtoDao, correlationId,
+                    progressMessageService, flowableFacade);
                 ApplicationColor idleMtaColor = liveMtaColor.getAlternativeColor();
+
                 getStepLogger().info(Messages.ASSUMED_LIVE_AND_IDLE_COLORS, liveMtaColor, idleMtaColor);
                 mtaColor = idleMtaColor;
             }

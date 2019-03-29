@@ -3,6 +3,8 @@ package com.sap.cloud.lm.sl.cf.process.steps;
 import java.util.List;
 import java.util.function.Supplier;
 
+import org.flowable.engine.impl.context.Context;
+import org.flowable.engine.impl.util.EngineServiceUtil;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
@@ -24,6 +26,12 @@ public class DetectMtaSchemaVersionStep extends SyncFlowableStep {
 
     @Override
     protected StepPhase executeStep(ExecutionWrapper execution) {
+        Context.getProcessEngineConfiguration()
+            .getHistoryService()
+            .createHistoricVariableInstanceQuery()
+            .processInstanceId("1234")
+            .variableName("color")
+            .list();
         getStepLogger().debug(Messages.DETECTING_MTA_MAJOR_SCHEMA_VERSION);
         try {
             DeploymentDescriptor deploymentDescriptor = StepsUtil.getUnresolvedDeploymentDescriptor(execution.getContext());
@@ -35,7 +43,7 @@ public class DetectMtaSchemaVersionStep extends SyncFlowableStep {
                 throw new SLException(com.sap.cloud.lm.sl.mta.message.Messages.UNSUPPORTED_VERSION, schemaVersion);
             }
             if (!SupportedVersions.isFullySupported(schemaVersion)) {
-               getStepLogger().warn(Messages.UNSUPPORTED_MINOR_VERSION, schemaVersion);
+                getStepLogger().warn(Messages.UNSUPPORTED_MINOR_VERSION, schemaVersion);
             }
             execution.getContext()
                 .setVariable(Constants.VAR_MTA_MAJOR_SCHEMA_VERSION, schemaVersion.getMajor());
