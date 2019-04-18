@@ -13,6 +13,7 @@ import com.sap.cloud.lm.sl.cf.core.model.DeployedMta;
 import com.sap.cloud.lm.sl.cf.process.Constants;
 import com.sap.cloud.lm.sl.cf.process.helpers.ApplicationColorDetector;
 import com.sap.cloud.lm.sl.common.ConflictException;
+import com.sap.cloud.lm.sl.common.SLException;
 import com.sap.cloud.lm.sl.common.util.JsonUtil;
 import com.sap.cloud.lm.sl.common.util.TestUtil;
 import com.sap.cloud.lm.sl.common.util.TestUtil.Expectation;
@@ -27,7 +28,7 @@ public class BlueGreenRenameStepTest extends SyncFlowableStepTest<BlueGreenRenam
     @Before
     public void setUp() throws Exception {
         prepareContext();
-        step.applicationColorDetector = mock(ApplicationColorDetector.class);
+        step.applicationColorDetector = applicationColorDetector;
     }
 
     private void prepareContext() throws Exception {
@@ -55,7 +56,7 @@ public class BlueGreenRenameStepTest extends SyncFlowableStepTest<BlueGreenRenam
     // Test what happens when there are 1 color(s) deployed:
     @Test
     public void testExecute1() throws Exception {
-        when(applicationColorDetector.detectSingularDeployedApplicationColor(any())).thenReturn(ApplicationColor.GREEN);
+        when(applicationColorDetector.detectSingularDeployedApplicationColor(any(DeployedMta.class))).thenReturn(ApplicationColor.GREEN);
 
         step.execute(context);
 
@@ -77,6 +78,15 @@ public class BlueGreenRenameStepTest extends SyncFlowableStepTest<BlueGreenRenam
 
         TestUtil.test(() -> StepsUtil.getDeploymentDescriptor(context),
             new Expectation(Expectation.Type.RESOURCE, "node-hello-blue-mtad.yaml.json"), getClass());
+    }
+
+    // Test what happens if SLException is thrown
+    @Test(expected = SLException.class)
+    public void testExecute3() {
+        when(applicationColorDetector.detectSingularDeployedApplicationColor(any(DeployedMta.class)))
+            .thenThrow(new SLException("Exception occurred"));
+        when(applicationColorDetector.detectLiveApplicationColor(any(), any())).thenReturn(ApplicationColor.GREEN);
+        step.execute(context);
     }
 
     @Override

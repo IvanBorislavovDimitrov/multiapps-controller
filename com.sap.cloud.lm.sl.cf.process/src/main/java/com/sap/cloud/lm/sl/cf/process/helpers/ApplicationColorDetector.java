@@ -2,12 +2,10 @@ package com.sap.cloud.lm.sl.cf.process.helpers;
 
 import java.util.Arrays;
 import java.util.Comparator;
-import java.util.Date;
 
 import javax.inject.Inject;
 import javax.inject.Named;
 
-import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.variable.api.history.HistoricVariableInstance;
 
 import com.sap.cloud.lm.sl.cf.core.dao.OperationDao;
