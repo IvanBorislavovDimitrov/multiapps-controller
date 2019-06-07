@@ -100,7 +100,8 @@ public class ValidateDeployParametersStep extends SyncFlowableStep {
             archivePartEntries.add(findFile(context, appArchivePartId));
         }
         getStepLogger().debug(Messages.BUILDING_ARCHIVE_FROM_PARTS);
-        new ArchiveMerger(fileService, getStepLogger(), context, logger).createArchiveFromParts(archivePartEntries, configuration);
+        retrier.executeWithRetry(() -> new ArchiveMerger(fileService, getStepLogger(), context, logger)
+            .createArchiveFromParts(archivePartEntries, configuration));
     }
 
     private FileEntry findFile(DelegateExecution context, String fileId) {

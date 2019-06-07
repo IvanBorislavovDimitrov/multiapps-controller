@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
+import com.sap.cloud.lm.sl.cf.client.util.ExecutionRetrier;
 import com.sap.cloud.lm.sl.cf.core.Constants;
 import com.sap.cloud.lm.sl.cf.core.cf.CloudControllerClientProvider;
 import com.sap.cloud.lm.sl.cf.persistence.services.FileService;
@@ -41,6 +42,7 @@ public abstract class SyncFlowableStep implements JavaDelegate {
     private ProcessLogsPersister processLogsPersister;
     protected ProcessStepHelper stepHelper;
     private StepLogger stepLogger;
+    protected ExecutionRetrier retrier = new ExecutionRetrier();
 
     @Override
     public void execute(DelegateExecution context) {

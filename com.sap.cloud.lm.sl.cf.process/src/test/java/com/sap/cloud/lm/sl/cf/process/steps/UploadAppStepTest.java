@@ -286,7 +286,9 @@ public class UploadAppStepTest {
 
         private void prepareContext() {
             // module name must be null
-            CloudApplicationExtended app = ImmutableCloudApplicationExtended.builder().name(APP_NAME).build();
+            CloudApplicationExtended app = ImmutableCloudApplicationExtended.builder()
+                .name(APP_NAME)
+                .build();
             StepsUtil.setApp(context, app);
             context.setVariable(Constants.VAR_MODULES_INDEX, 0);
             context.setVariable(Constants.PARAM_APP_ARCHIVE_ID, APP_ARCHIVE);

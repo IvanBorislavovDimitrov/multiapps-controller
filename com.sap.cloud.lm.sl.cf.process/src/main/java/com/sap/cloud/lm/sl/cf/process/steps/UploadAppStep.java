@@ -32,6 +32,7 @@ import com.sap.cloud.lm.sl.cf.core.model.SupportedParameters;
 import com.sap.cloud.lm.sl.cf.core.util.ApplicationConfiguration;
 import com.sap.cloud.lm.sl.cf.persistence.processors.DefaultFileDownloadProcessor;
 import com.sap.cloud.lm.sl.cf.persistence.processors.FileDownloadProcessor;
+import com.sap.cloud.lm.sl.cf.persistence.services.FileContentProcessor;
 import com.sap.cloud.lm.sl.cf.persistence.services.FileStorageException;
 import com.sap.cloud.lm.sl.cf.process.Constants;
 import com.sap.cloud.lm.sl.cf.process.message.Messages;
@@ -68,7 +69,6 @@ public class UploadAppStep extends TimeoutAsyncFlowableStep {
 
             if (fileName == null) {
                 getStepLogger().debug(Messages.NO_CONTENT_TO_UPLOAD);
-
                 return StepPhase.DONE;
             }
 
@@ -87,6 +87,7 @@ public class UploadAppStep extends TimeoutAsyncFlowableStep {
             getStepLogger().error(e, Messages.ERROR_UPLOADING_APP, app.getName());
             throw e;
         }
+
         return StepPhase.POLL;
     }
 
@@ -94,15 +95,17 @@ public class UploadAppStep extends TimeoutAsyncFlowableStep {
         DelegateExecution context = execution.getContext();
         StringBuilder digestStringBuilder = new StringBuilder();
         FileDownloadProcessor fileDownloadProcessor = new DefaultFileDownloadProcessor(StepsUtil.getSpaceId(context), appArchiveId,
-            appArchiveStream -> {
-                long maxSize = configuration.getMaxResourceFileSize();
-                ApplicationArchiveContext applicationArchiveContext = createApplicationArchiveContext(appArchiveStream, fileName, maxSize);
-                digestStringBuilder.append(applicationArchiveReader.calculateApplicationDigest(applicationArchiveContext));
-            });
-
+            createDigestCalculatorFileContentProcessor(digestStringBuilder, fileName));
         fileService.processFileContent(fileDownloadProcessor);
-
         return digestStringBuilder.toString();
+    }
+
+    private FileContentProcessor createDigestCalculatorFileContentProcessor(StringBuilder digestStringBuilder, String fileName) {
+        return appArchiveStream -> {
+            long maxSize = configuration.getMaxResourceFileSize();
+            ApplicationArchiveContext applicationArchiveContext = createApplicationArchiveContext(appArchiveStream, fileName, maxSize);
+            digestStringBuilder.append(applicationArchiveReader.calculateApplicationDigest(applicationArchiveContext));
+        };
     }
 
     protected ApplicationArchiveContext createApplicationArchiveContext(InputStream appArchiveStream, String fileName, long maxSize) {
@@ -114,26 +117,28 @@ public class UploadAppStep extends TimeoutAsyncFlowableStep {
         UploadToken uploadToken = new UploadToken();
         DelegateExecution context = execution.getContext();
         FileDownloadProcessor uploadFileToControllerProcessor = new DefaultFileDownloadProcessor(StepsUtil.getSpaceId(context),
-            appArchiveId, appArchiveStream -> {
-                Path filePath = null;
-                long maxSize = configuration.getMaxResourceFileSize();
-                try {
-                    ApplicationArchiveContext applicationArchiveContext = createApplicationArchiveContext(appArchiveStream, fileName,
-                        maxSize);
-                    filePath = extractFromMtar(applicationArchiveContext);
-                    upload(execution, client, app, filePath, uploadToken);
-                } catch (IOException e) {
-                    cleanUp(filePath);
-                    throw new SLException(e, Messages.ERROR_RETRIEVING_MTA_MODULE_CONTENT, fileName);
-                } catch (CloudOperationException e) {
-                    cleanUp(filePath);
-                    throw e;
-                }
-            });
-
+            appArchiveId, createUploadToControllerArchiveFileContentProcessor(execution, client, app, uploadToken, fileName));
         fileService.processFileContent(uploadFileToControllerProcessor);
-
         return uploadToken;
+    }
+
+    private FileContentProcessor createUploadToControllerArchiveFileContentProcessor(ExecutionWrapper execution,
+        CloudControllerClient client, CloudApplication app, UploadToken uploadToken, String fileName) {
+        return appArchiveStream -> {
+            Path filePath = null;
+            long maxSize = configuration.getMaxResourceFileSize();
+            try {
+                ApplicationArchiveContext applicationArchiveContext = createApplicationArchiveContext(appArchiveStream, fileName, maxSize);
+                filePath = extractFromMtar(applicationArchiveContext);
+                upload(execution, client, app, filePath, uploadToken);
+            } catch (IOException e) {
+                cleanUp(filePath);
+                throw new SLException(e, Messages.ERROR_RETRIEVING_MTA_MODULE_CONTENT, fileName);
+            } catch (CloudOperationException e) {
+                cleanUp(filePath);
+                throw e;
+            }
+        };
     }
 
     protected Path extractFromMtar(ApplicationArchiveContext applicationArchiveContext) {

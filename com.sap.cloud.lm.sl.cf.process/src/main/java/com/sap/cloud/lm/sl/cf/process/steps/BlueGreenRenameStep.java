@@ -45,12 +45,8 @@ public class BlueGreenRenameStep extends SyncFlowableStep {
                 }
             } catch (ConflictException e) {
                 getStepLogger().warn(e.getMessage());
-
-                ApplicationColor liveMtaColor = applicationColorDetector.detectLiveApplicationColor(deployedMta,
-                    (String) execution.getContext()
-                        .getVariable(Constants.VAR_CORRELATION_ID));
+                ApplicationColor liveMtaColor = getLiveApplicationColor(deployedMta, execution);
                 ApplicationColor idleMtaColor = liveMtaColor.getAlternativeColor();
-
                 getStepLogger().info(Messages.ASSUMED_LIVE_AND_IDLE_COLORS, liveMtaColor, idleMtaColor);
                 mtaColor = idleMtaColor;
             }
@@ -67,6 +63,11 @@ public class BlueGreenRenameStep extends SyncFlowableStep {
             getStepLogger().error(e, Messages.ERROR_RENAMING_MODULES);
             throw e;
         }
+    }
+
+    private ApplicationColor getLiveApplicationColor(DeployedMta deployedMta, ExecutionWrapper execution) {
+        return applicationColorDetector.detectLiveApplicationColor(deployedMta, (String) execution.getContext()
+            .getVariable(Constants.VAR_CORRELATION_ID));
     }
 
     protected void visit(ExecutionWrapper execution, DeploymentDescriptor descriptor, ApplicationColor mtaColor,

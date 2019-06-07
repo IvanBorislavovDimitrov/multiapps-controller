@@ -54,7 +54,7 @@ public class ProcessGitSourceStep extends SyncFlowableStep {
     private ApplicationConfiguration configuration;
 
     @Override
-    protected StepPhase executeStep(ExecutionWrapper execution) {
+    protected StepPhase executeStep(ExecutionWrapper execution) throws GitAPIException {
         try {
             getStepLogger().info(Messages.DOWNLOADING_DEPLOYABLE);
 
@@ -72,10 +72,8 @@ public class ProcessGitSourceStep extends SyncFlowableStep {
             }
             Path mtarZip = null;
             try {
-
-                GitRepoCloner cloner = createCloner(execution);
                 getStepLogger().info(Messages.CLONING_REPOSITORY, gitUri);
-                cloner.cloneRepo(gitUri, reposDir);
+                retrier.executeWithRetry(() -> cloneRepo(execution, gitUri, reposDir));
                 final Path mtaRepoPath = reposDir.resolve(gitRepoPath)
                     .normalize();
                 mtarZip = zipRepoContent(mtaRepoPath);
@@ -99,9 +97,18 @@ public class ProcessGitSourceStep extends SyncFlowableStep {
         } catch (SLException e) {
             getStepLogger().error(e.getMessage());
             throw e;
-        } catch (GitAPIException | IOException | FileStorageException e) {
+        } catch (IOException | FileStorageException e) {
             getStepLogger().error(e, Messages.ERROR_DOWNLOADING_DEPLOYABLE_FROM_GIT);
             throw new SLException(e, Messages.ERROR_PROCESSING_GIT_MTA_SOURCE);
+        }
+    }
+
+    private void cloneRepo(ExecutionWrapper execution, String gitUri, Path reposDir) {
+        GitRepoCloner cloner = createCloner(execution);
+        try {
+            cloner.cloneRepo(gitUri, reposDir);
+        } catch (GitAPIException | IOException e) {
+            throw new SLException(e, e.getMessage());
         }
     }
 
@@ -173,6 +180,7 @@ public class ProcessGitSourceStep extends SyncFlowableStep {
         final Path zipFilePath = Paths.get(mtaPath.toString() + MTAR_EXTENTION);
         try (ZipOutputStream zipOutputStream = new ZipOutputStream(new FileOutputStream(zipFilePath.toFile()))) {
             Files.walkFileTree(mtaPath, new SimpleFileVisitor<Path>() {
+                @Override
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                     if (shouldOmmitFile(file)) {
                         return FileVisitResult.CONTINUE;
@@ -184,6 +192,7 @@ public class ProcessGitSourceStep extends SyncFlowableStep {
                     return FileVisitResult.CONTINUE;
                 }
 
+                @Override
                 public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
                     if (shouldOmmitDirectory(dir)) {
                         return FileVisitResult.SKIP_SUBTREE;

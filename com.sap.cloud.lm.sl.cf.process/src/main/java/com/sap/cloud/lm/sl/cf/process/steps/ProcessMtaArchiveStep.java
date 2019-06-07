@@ -17,6 +17,7 @@ import com.sap.cloud.lm.sl.cf.core.helpers.MtaArchiveHelper;
 import com.sap.cloud.lm.sl.cf.core.util.ApplicationConfiguration;
 import com.sap.cloud.lm.sl.cf.persistence.processors.DefaultFileDownloadProcessor;
 import com.sap.cloud.lm.sl.cf.persistence.processors.FileDownloadProcessor;
+import com.sap.cloud.lm.sl.cf.persistence.services.FileContentProcessor;
 import com.sap.cloud.lm.sl.cf.persistence.services.FileStorageException;
 import com.sap.cloud.lm.sl.cf.process.Constants;
 import com.sap.cloud.lm.sl.cf.process.message.Messages;
@@ -42,7 +43,6 @@ public class ProcessMtaArchiveStep extends SyncFlowableStep {
     protected StepPhase executeStep(ExecutionWrapper execution) {
         try {
             getStepLogger().debug(Messages.PROCESSING_MTA_ARCHIVE);
-
             String appArchiveId = StepsUtil.getRequiredString(execution.getContext(), Constants.PARAM_APP_ARCHIVE_ID);
             processApplicationArchive(execution.getContext(), appArchiveId);
             setMtaIdForProcess(execution.getContext());
@@ -60,48 +60,60 @@ public class ProcessMtaArchiveStep extends SyncFlowableStep {
 
     private void processApplicationArchive(final DelegateExecution context, String appArchiveId) throws FileStorageException {
         FileDownloadProcessor deploymentDescriptorProcessor = new DefaultFileDownloadProcessor(StepsUtil.getSpaceId(context), appArchiveId,
-            appArchiveStream -> {
-                String descriptorString = ArchiveHandler.getDescriptor(appArchiveStream, configuration.getMaxMtaDescriptorSize());
-                DescriptorParserFacade descriptorParserFacade = new DescriptorParserFacade();
-                DeploymentDescriptor deploymentDescriptor = descriptorParserFacade.parseDeploymentDescriptor(descriptorString);
-                StepsUtil.setDeploymentDescriptor(context, deploymentDescriptor);
-            });
-
+            createDeploymentDescriptorFileContentProcessor(context));
         fileService.processFileContent(deploymentDescriptorProcessor);
-
         FileDownloadProcessor manifestProcessor = new DefaultFileDownloadProcessor(StepsUtil.getSpaceId(context), appArchiveId,
-            appArchiveStream -> {
-                // Create and initialize helper
-                Manifest manifest = ArchiveHandler.getManifest(appArchiveStream, configuration.getMaxManifestSize());
-                MtaArchiveHelper helper = getHelper(manifest);
-                helper.init();
-
-                getStepLogger().debug("MTA Archive ID: {0}", appArchiveId);
-
-                MtaArchiveElements mtaArchiveElements = new MtaArchiveElements();
-                // Set MTA archive modules in the context
-                Map<String, String> mtaArchiveModules = helper.getMtaArchiveModules();
-                mtaArchiveModules.forEach((moduleName, fileName) -> mtaArchiveElements.addModuleFileName(moduleName, fileName));
-                getStepLogger().debug("MTA Archive Modules: {0}", mtaArchiveModules.keySet());
-                StepsUtil.setMtaArchiveModules(context, mtaArchiveModules.keySet());
-
-                Map<String, String> mtaArchiveRequiresDependencies = helper.getMtaRequiresDependencies();
-                mtaArchiveRequiresDependencies
-                    .forEach((requiresName, fileName) -> mtaArchiveElements.addRequiredDependencyFileName(requiresName, fileName));
-                getStepLogger().debug("MTA Archive Requires: {0}", mtaArchiveRequiresDependencies.keySet());
-
-                // Set MTA archive resources in the context
-                Map<String, String> mtaArchiveResources = helper.getMtaArchiveResources();
-                mtaArchiveResources.forEach((resourceName, fileName) -> mtaArchiveElements.addResourceFileName(resourceName, fileName));
-                getStepLogger().debug("MTA Archive Resources: {0}", mtaArchiveResources.keySet());
-
-                StepsUtil.setMtaArchiveElements(context, mtaArchiveElements);
-            });
+            createManifestFileContentProcessor(appArchiveId, context));
         fileService.processFileContent(manifestProcessor);
+    }
+
+    private FileContentProcessor createDeploymentDescriptorFileContentProcessor(DelegateExecution context) {
+        return appArchiveStream -> {
+            String descriptorString = ArchiveHandler.getDescriptor(appArchiveStream, configuration.getMaxMtaDescriptorSize());
+            DescriptorParserFacade descriptorParserFacade = new DescriptorParserFacade();
+            DeploymentDescriptor deploymentDescriptor = descriptorParserFacade.parseDeploymentDescriptor(descriptorString);
+            StepsUtil.setDeploymentDescriptor(context, deploymentDescriptor);
+        };
+    }
+
+    private FileContentProcessor createManifestFileContentProcessor(String appArchiveId, DelegateExecution context) {
+        return appArchiveStream -> {
+            // Create and initialize helper
+            Manifest manifest = ArchiveHandler.getManifest(appArchiveStream, configuration.getMaxManifestSize());
+            MtaArchiveHelper helper = getHelper(manifest);
+            helper.init();
+            getStepLogger().debug("MTA Archive ID: {0}", appArchiveId);
+            MtaArchiveElements mtaArchiveElements = new MtaArchiveElements();
+            setMtaArchiveModulesInContext(helper, mtaArchiveElements, context);
+            setMtaRequiredDependenciesInContext(helper, mtaArchiveElements, context);
+            logMtaArchiveResources(helper, mtaArchiveElements);
+            StepsUtil.setMtaArchiveElements(context, mtaArchiveElements);
+        };
     }
 
     protected MtaArchiveHelper getHelper(Manifest manifest) {
         return new MtaArchiveHelper(manifest);
+    }
+
+    private void setMtaArchiveModulesInContext(MtaArchiveHelper helper, MtaArchiveElements mtaArchiveElements, DelegateExecution context) {
+        Map<String, String> mtaArchiveModules = helper.getMtaArchiveModules();
+        mtaArchiveModules.forEach(mtaArchiveElements::addModuleFileName);
+        getStepLogger().debug("MTA Archive Modules: {0}", mtaArchiveModules.keySet());
+        StepsUtil.setMtaArchiveModules(context, mtaArchiveModules.keySet());
+    }
+
+    private void setMtaRequiredDependenciesInContext(MtaArchiveHelper helper, MtaArchiveElements mtaArchiveElements,
+        DelegateExecution context) {
+        Map<String, String> mtaArchiveRequiresDependencies = helper.getMtaRequiresDependencies();
+        mtaArchiveRequiresDependencies.forEach(mtaArchiveElements::addRequiredDependencyFileName);
+        getStepLogger().debug("MTA Archive Requires: {0}", mtaArchiveRequiresDependencies.keySet());
+        StepsUtil.setMtaArchiveElements(context, mtaArchiveElements);
+    }
+
+    private void logMtaArchiveResources(MtaArchiveHelper helper, MtaArchiveElements mtaArchiveElements) {
+        Map<String, String> mtaArchiveResources = helper.getMtaArchiveResources();
+        mtaArchiveResources.forEach(mtaArchiveElements::addResourceFileName);
+        getStepLogger().debug("MTA Archive Resources: {0}", mtaArchiveResources.keySet());
     }
 
     private void setMtaIdForProcess(DelegateExecution context) {
@@ -111,5 +123,4 @@ public class ProcessMtaArchiveStep extends SyncFlowableStep {
         conflictPreventerSupplier.apply(operationDao)
             .acquireLock(mtaId, StepsUtil.getSpaceId(context), StepsUtil.getCorrelationId(context));
     }
-
 }
