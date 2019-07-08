@@ -89,6 +89,8 @@ public class ApplicationConfiguration {
     static final String CFG_AUDIT_LOG_CLIENT_QUEUE_CAPACITY = "AUDIT_LOG_CLIENT_QUEUE_CAPACITY";
     static final String CFG_AUDIT_LOG_CLIENT_KEEP_ALIVE = "AUDIT_LOG_CLIENT_KEEP_ALIVE";
     static final String CFG_FSS_CACHE_UPDATE_TIMEOUT_MINUTES = "FSS_CACHE_UPDATE_TIMEOUT_MINUTES";
+    static final String CFG_RETRY_COUNT = "RETRY_COUNT";
+    static final String CFG_TIME_BETWEEN_RETRIES = "TIME_BETWEEN_RETRIES";
 
     private static final List<String> VCAP_APPLICATION_URIS_KEYS = Arrays.asList("full_application_uris", "application_uris", "uris");
 
@@ -113,6 +115,8 @@ public class ApplicationConfiguration {
     public static final Integer DEFAULT_DB_CONNECTION_THREADS = 30;
     public static final String DEFAULT_CRON_EXPRESSION_FOR_OLD_DATA = "0 0 0/6 * * ?"; // every 6 hours
     public static final long DEFAULT_MAX_TTL_FOR_OLD_DATA = TimeUnit.DAYS.toSeconds(5); // 5 days
+    public static final int DEFAULT_RETRY_COUNT = 3;
+    public static final int DEFAULT_TIME_BETWEEN_RETRIES = 5000;
     /**
      * The minimum duration for an Activiti timer is 5 seconds, because when the job manager schedules a new timer, it checks whether that
      * timer should fire in the next 5 seconds. If so, it hints the job executor that it should execute that timer ASAP. However, there is
@@ -545,6 +549,14 @@ public class ApplicationConfiguration {
             fssCacheUpdateTimeoutMinutes = getFssCacheUpdateTimeoutMinutesFromEnvironment();
         }
         return fssCacheUpdateTimeoutMinutes;
+    }
+
+    public Integer getTimeBetweenRetries() {
+        return environment.getInteger(CFG_TIME_BETWEEN_RETRIES, DEFAULT_TIME_BETWEEN_RETRIES);
+    }
+
+    public Integer getRetryCountFromEnvironment() {
+        return environment.getInteger(CFG_RETRY_COUNT, DEFAULT_RETRY_COUNT);
     }
 
     private PlatformType getPlatformTypeFromEnvironment() {

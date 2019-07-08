@@ -21,6 +21,7 @@ import org.flowable.engine.delegate.DelegateExecution;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.ResourceAccessException;
 
 import com.sap.cloud.lm.sl.cf.client.lib.domain.CloudApplicationExtended;
 import com.sap.cloud.lm.sl.cf.client.lib.domain.UploadStatusCallbackExtended;
@@ -80,26 +81,44 @@ public class UploadAppStep extends TimeoutAsyncFlowableStep {
     }
 
     private UploadToken asyncUploadFiles(ExecutionWrapper execution, CloudControllerClient client, CloudApplication app,
-        String appArchiveId, String fileName) throws FileStorageException {
+                                         String appArchiveId, String fileName)
+        throws FileStorageException {
         UploadToken uploadToken = new UploadToken();
         final DelegateExecution context = execution.getContext();
-        FileDownloadProcessor uploadFileToControllerProcessor = new DefaultFileDownloadProcessor(StepsUtil.getSpaceId(context),
-            appArchiveId, appArchiveStream -> {
-                Path filePath = null;
-                long maxSize = configuration.getMaxResourceFileSize();
-                try {
-                    filePath = extractFromMtar(appArchiveStream, fileName, maxSize);
-                    upload(execution, client, app, filePath, uploadToken);
-                } catch (IOException e) {
-                    cleanUp(filePath);
-                    throw new SLException(e, Messages.ERROR_RETRIEVING_MTA_MODULE_CONTENT, fileName);
-                } catch (CloudOperationException e) {
-                    cleanUp(filePath);
-                    throw e;
-                }
-            });
-
-        fileService.processFileContent(uploadFileToControllerProcessor);
+        for (int i = 0; i < configuration.getRetryCountFromEnvironment(); i++) {
+            try {
+                FileDownloadProcessor uploadFileToControllerProcessor = new DefaultFileDownloadProcessor(StepsUtil.getSpaceId(context),
+                                                                                                         appArchiveId,
+                                                                                                         appArchiveStream -> {
+                                                                                                             Path filePath = null;
+                                                                                                             long maxSize = configuration.getMaxResourceFileSize();
+                                                                                                             try {
+                                                                                                                 filePath = extractFromMtar(appArchiveStream,
+                                                                                                                                            fileName,
+                                                                                                                                            maxSize);
+                                                                                                                 upload(execution, client,
+                                                                                                                        app, filePath,
+                                                                                                                        uploadToken);
+                                                                                                             } catch (ResourceAccessException e) {
+                                                                                                                 cleanUp(filePath);
+                                                                                                                 throw new SLException(e,
+                                                                                                                                       Messages.ERROR_RETRIEVING_MTA_MODULE_CONTENT,
+                                                                                                                                       fileName);
+                                                                                                             } catch (CloudOperationException e) {
+                                                                                                                 cleanUp(filePath);
+                                                                                                                 throw e;
+                                                                                                             }
+                                                                                                         });
+                fileService.processFileContent(uploadFileToControllerProcessor);
+                return uploadToken;
+            } catch (Exception e) {
+                getStepLogger().info("Error occurred (RETRYING...): " + e.getMessage());
+                sleep(configuration.getTimeBetweenRetries());
+            }
+        }
+        if (uploadToken.getToken() == null) {
+            throw new IllegalArgumentException("Not uploaded");
+        }
 
         return uploadToken;
     }
@@ -110,16 +129,33 @@ public class UploadAppStep extends TimeoutAsyncFlowableStep {
     }
 
     private void upload(ExecutionWrapper execution, CloudControllerClient client, CloudApplication app, Path filePath,
-        UploadToken uploadToken) throws IOException {
+                        UploadToken uploadToken)
+        throws IOException {
         detectApplicationFileDigestChanges(execution, app, filePath.toFile(), client);
-        UploadToken currentUploadTokent = client.asyncUploadApplication(app.getName(), filePath.toFile(),
-            getMonitorUploadStatusCallback(app, filePath.toFile(), execution.getContext()));
-        uploadToken.setPackageGuid(currentUploadTokent.getPackageGuid());
-        uploadToken.setToken(currentUploadTokent.getToken());
+        UploadToken currentUploadToken = asyncUploadApplication(execution, client, app, filePath);
+        uploadToken.setPackageGuid(currentUploadToken.getPackageGuid());
+        uploadToken.setToken(currentUploadToken.getToken());
+    }
+
+    private UploadToken asyncUploadApplication(ExecutionWrapper execution, CloudControllerClient client, CloudApplication app,
+                                               Path filePath)
+        throws IOException {
+
+        return client.asyncUploadApplication(app.getName(), filePath.toFile(),
+                                             getMonitorUploadStatusCallback(app, filePath.toFile(), execution.getContext()));
+
+    }
+
+    private void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            throw new IllegalStateException("Waiting to retry operation was interrupted", e);
+        }
     }
 
     private void detectApplicationFileDigestChanges(ExecutionWrapper execution, CloudApplication app, File applicationFile,
-        CloudControllerClient client) {
+                                                    CloudControllerClient client) {
         CloudApplication existingApp = client.getApplication(app.getName());
         ApplicationFileDigestDetector applicationFileDigestDetector = new ApplicationFileDigestDetector(existingApp);
         String appNewFileDigest = applicationFileDigestDetector.detectNewAppFileDigest(applicationFile);
@@ -129,13 +165,14 @@ public class UploadAppStep extends TimeoutAsyncFlowableStep {
     }
 
     private void attemptToUpdateApplicationDigest(CloudControllerClient client, CloudApplication app, String newFileDigest,
-        String currentFileDigest) {
+                                                  String currentFileDigest) {
         if (!hasAppFileDigestChanged(newFileDigest, currentFileDigest)) {
             return;
         }
-        new ApplicationEnvironmentUpdater(app, client).updateApplicationEnvironment(
-            com.sap.cloud.lm.sl.cf.core.Constants.ENV_DEPLOY_ATTRIBUTES, com.sap.cloud.lm.sl.cf.core.Constants.ATTR_APP_CONTENT_DIGEST,
-            newFileDigest);
+        new ApplicationEnvironmentUpdater(app,
+                                          client).updateApplicationEnvironment(com.sap.cloud.lm.sl.cf.core.Constants.ENV_DEPLOY_ATTRIBUTES,
+                                                                               com.sap.cloud.lm.sl.cf.core.Constants.ATTR_APP_CONTENT_DIGEST,
+                                                                               newFileDigest);
     }
 
     private boolean hasAppFileDigestChanged(String newFileDigest, String currentFileDigest) {
@@ -144,7 +181,7 @@ public class UploadAppStep extends TimeoutAsyncFlowableStep {
 
     private void setAppContentChanged(ExecutionWrapper execution, boolean appContentChanged) {
         execution.getContext()
-            .setVariable(Constants.VAR_APP_CONTENT_CHANGED, Boolean.toString(appContentChanged));
+                 .setVariable(Constants.VAR_APP_CONTENT_CHANGED, Boolean.toString(appContentChanged));
     }
 
     MonitorUploadStatusCallback getMonitorUploadStatusCallback(CloudApplication app, File file, DelegateExecution context) {

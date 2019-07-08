@@ -55,11 +55,12 @@ import com.sap.cloud.lm.sl.cf.client.util.ExecutionRetrier;
 
 public class ResilientCloudControllerClient implements CloudControllerClientSupportingCustomUserIds {
 
-    private final ExecutionRetrier retrier = new ExecutionRetrier();
+    private final ExecutionRetrier retrier;
     private final CloudControllerClientImpl cc;
 
     public ResilientCloudControllerClient(CloudControllerRestClient cc) {
         this.cc = new CloudControllerClientImpl(cc);
+        retrier = new ExecutionRetrier();
     }
 
     @Override
@@ -138,7 +139,7 @@ public class ResilientCloudControllerClient implements CloudControllerClientSupp
 
     @Override
     public void createApplication(String appName, Staging staging, Integer disk, Integer memory, List<String> uris,
-        List<String> serviceNames, DockerInfo dockerInfo) {
+                                  List<String> serviceNames, DockerInfo dockerInfo) {
         executeWithRetry(() -> cc.createApplication(appName, staging, disk, memory, uris, serviceNames, dockerInfo));
     }
 
@@ -438,7 +439,8 @@ public class ResilientCloudControllerClient implements CloudControllerClientSupp
     }
 
     @Override
-    public UploadToken asyncUploadApplication(String appName, ApplicationArchive archive, UploadStatusCallback callback) throws IOException {
+    public UploadToken asyncUploadApplication(String appName, ApplicationArchive archive, UploadStatusCallback callback)
+        throws IOException {
         return executeWithRetry(() -> {
             try {
                 return cc.asyncUploadApplication(appName, archive, callback);
@@ -979,8 +981,8 @@ public class ResilientCloudControllerClient implements CloudControllerClientSupp
 
     private List<String> toStrings(List<UUID> uuids) {
         return uuids.stream()
-            .map(UUID::toString)
-            .collect(Collectors.toList());
+                    .map(UUID::toString)
+                    .collect(Collectors.toList());
     }
 
     @Override
@@ -994,7 +996,7 @@ public class ResilientCloudControllerClient implements CloudControllerClientSupp
     }
 
     @Override
-    public void bindDropletToApp(UUID dropletGuid,UUID appGuid) {
+    public void bindDropletToApp(UUID dropletGuid, UUID appGuid) {
         executeWithRetry(() -> cc.bindDropletToApp(dropletGuid, appGuid));
     }
 }
