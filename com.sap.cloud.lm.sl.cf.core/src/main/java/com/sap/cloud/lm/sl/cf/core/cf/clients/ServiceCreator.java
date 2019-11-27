@@ -7,6 +7,7 @@ import java.util.function.Supplier;
 import javax.inject.Inject;
 import javax.inject.Named;
 
+import com.sap.cloud.lm.sl.cf.core.util.UserMessageLogger;
 import org.cloudfoundry.client.lib.CloudControllerClient;
 import org.cloudfoundry.client.lib.domain.CloudServicePlan;
 import org.slf4j.Logger;
@@ -36,18 +37,18 @@ public class ServiceCreator extends CloudServiceOperator {
         return this;
     }
 
-    public MethodExecution<String> createService(CloudControllerClient client, CloudServiceExtended service, String spaceId) {
+    public MethodExecution<String> createService(CloudControllerClient client, CloudServiceExtended service, String spaceId, UserMessageLogger userMessageLogger) {
         return errorHandlerSupplier.get()
-                                   .handleErrorsOrReturnResult(() -> attemptToCreateService(client, service, spaceId));
+                                   .handleErrorsOrReturnResult(() -> attemptToCreateService(client, service, spaceId, userMessageLogger));
     }
 
-    private MethodExecution<String> attemptToCreateService(CloudControllerClient client, CloudServiceExtended service, String spaceId) {
+    private MethodExecution<String> attemptToCreateService(CloudControllerClient client, CloudServiceExtended service, String spaceId, UserMessageLogger userMessageLogger) {
         assertServiceAttributes(service);
 
         RestTemplate restTemplate = getRestTemplate(client);
         String cloudControllerUrl = client.getCloudControllerUrl()
                                           .toString();
-        CloudServicePlan cloudServicePlan = findPlanForService(client, service);
+        CloudServicePlan cloudServicePlan = findPlanForService(client, service, userMessageLogger);
 
         Map<String, Object> serviceRequest = createServiceRequest(service, spaceId, cloudServicePlan);
         String url = getUrl(cloudControllerUrl, CREATE_SERVICE_URL_ACCEPTS_INCOMPLETE_TRUE);
@@ -65,6 +66,7 @@ public class ServiceCreator extends CloudServiceOperator {
                                                               .toString());
         serviceRequest.put(SERVICE_PARAMETERS, service.getCredentials());
         serviceRequest.put(SERVICE_TAGS, service.getTags());
+
         return serviceRequest;
     }
 

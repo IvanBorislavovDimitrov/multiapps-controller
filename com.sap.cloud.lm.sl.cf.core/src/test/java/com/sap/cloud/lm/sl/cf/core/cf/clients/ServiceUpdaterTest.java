@@ -46,7 +46,7 @@ public class ServiceUpdaterTest extends CloudServiceOperatorTest {
         Mockito.when(client.getService(EXISTING_SERVICE_NAME))
                .thenReturn(EXISTING_SERVICE);
 
-        serviceUpdater.updateServicePlan(client, EXISTING_SERVICE_NAME, "v3.0-small");
+        serviceUpdater.updateServicePlan(client, EXISTING_SERVICE_NAME, "v3.0-small", null);
 
         validatePlanUpdate("8e886beb-85cb-4455-9474-b6dfda36ffeb");
     }
@@ -72,7 +72,7 @@ public class ServiceUpdaterTest extends CloudServiceOperatorTest {
 
         try {
             // When:
-            serviceUpdater.updateServicePlan(client, EXISTING_SERVICE_NAME, "v3.0-large");
+            serviceUpdater.updateServicePlan(client, EXISTING_SERVICE_NAME, "v3.0-large", null);
         } catch (CloudOperationException e) {
             // Then:
             assertEquals("404 Not Found: Could not create service instance \"foo\". Service plan \"v3.0-large\" from service offering \"mongodb\" was not found.",
@@ -91,7 +91,7 @@ public class ServiceUpdaterTest extends CloudServiceOperatorTest {
 
         try {
             // When:
-            serviceUpdater.updateServicePlan(client, EXISTING_SERVICE_NAME, "v3.0-small");
+            serviceUpdater.updateServicePlan(client, EXISTING_SERVICE_NAME, "v3.0-small", null);
         } catch (CloudOperationException e) {
             // Then:
             assertEquals("404 Not Found: Service \"foo\" was not found!", e.getMessage());

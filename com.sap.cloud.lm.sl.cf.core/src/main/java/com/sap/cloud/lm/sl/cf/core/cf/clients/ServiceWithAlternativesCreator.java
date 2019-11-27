@@ -37,7 +37,7 @@ public class ServiceWithAlternativesCreator {
 
     public MethodExecution<String> createService(CloudControllerClient client, CloudServiceExtended service, String spaceId) {
         if (CollectionUtils.isEmpty(service.getAlternativeLabels())) {
-            return serviceCreator.createService(client, service, spaceId);
+            return serviceCreator.createService(client, service, spaceId, userMessageLogger);
         }
         userMessageLogger.debug("Service \"{0}\" has defined service offering alternatives \"{1}\" for default service offering \"{2}\"",
                                 service.getName(), service.getAlternativeLabels(), service.getLabel());
@@ -115,7 +115,7 @@ public class ServiceWithAlternativesCreator {
             try {
                 CloudServiceExtended serviceWithCorrectLabel = ImmutableCloudServiceExtended.copyOf(service)
                                                                                             .withLabel(validServiceOffering);
-                return serviceCreator.createService(client, serviceWithCorrectLabel, spaceId);
+                return serviceCreator.createService(client, serviceWithCorrectLabel, spaceId, userMessageLogger);
             } catch (CloudOperationException e) {
                 if (!shouldIgnoreException(e)) {
                     throw e;

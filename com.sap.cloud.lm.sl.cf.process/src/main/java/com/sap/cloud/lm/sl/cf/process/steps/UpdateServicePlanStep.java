@@ -29,9 +29,9 @@ public class UpdateServicePlanStep extends ServiceStep {
         getStepLogger().debug(MessageFormat.format("Updating service plan of a service {0} with new plan: {1}", service.getName(),
                                                    service.getPlan()));
         if (service.shouldIgnoreUpdateErrors()) {
-            return getServiceUpdater().updateServicePlanQuietly(client, service.getName(), service.getPlan());
+            return getServiceUpdater().updateServicePlanQuietly(client, service.getName(), service.getPlan(), null);
         }
-        return getServiceUpdater().updateServicePlan(client, service.getName(), service.getPlan());
+        return getServiceUpdater().updateServicePlan(client, service.getName(), service.getPlan(), null);
     }
 
     @Override

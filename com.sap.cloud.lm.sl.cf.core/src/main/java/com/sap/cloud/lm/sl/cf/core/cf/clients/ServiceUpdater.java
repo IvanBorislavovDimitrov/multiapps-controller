@@ -9,6 +9,7 @@ import java.util.function.Supplier;
 import javax.inject.Inject;
 import javax.inject.Named;
 
+import com.sap.cloud.lm.sl.cf.core.util.UserMessageLogger;
 import org.cloudfoundry.client.lib.CloudControllerClient;
 import org.cloudfoundry.client.lib.CloudOperationException;
 import org.cloudfoundry.client.lib.domain.CloudService;
@@ -40,13 +41,13 @@ public class ServiceUpdater extends CloudServiceOperator {
         super(restTemplateFactory);
     }
 
-    public MethodExecution<String> updateServicePlanQuietly(CloudControllerClient client, String serviceName, String servicePlan) {
-        return ignoreBadGatewayErrors(() -> updateServicePlan(client, serviceName, servicePlan));
+    public MethodExecution<String> updateServicePlanQuietly(CloudControllerClient client, String serviceName, String servicePlan, UserMessageLogger userMessageLogger) {
+        return ignoreBadGatewayErrors(() -> updateServicePlan(client, serviceName, servicePlan, userMessageLogger));
     }
 
-    public MethodExecution<String> updateServicePlan(CloudControllerClient client, String serviceName, String servicePlan) {
+    public MethodExecution<String> updateServicePlan(CloudControllerClient client, String serviceName, String servicePlan, UserMessageLogger userMessageLogger) {
         return new CustomControllerClientErrorHandler().handleErrorsOrReturnResult(() -> attemptToUpdateServicePlan(client, serviceName,
-                                                                                                                    servicePlan));
+                                                                                                                    servicePlan, userMessageLogger));
     }
 
     public MethodExecution<String> updateServiceTagsQuietly(CloudControllerClient client, String serviceName, List<String> serviceTags) {
@@ -70,9 +71,9 @@ public class ServiceUpdater extends CloudServiceOperator {
                                                                                                                           parameters));
     }
 
-    private MethodExecution<String> attemptToUpdateServicePlan(CloudControllerClient client, String serviceName, String servicePlanName) {
+    private MethodExecution<String> attemptToUpdateServicePlan(CloudControllerClient client, String serviceName, String servicePlanName, UserMessageLogger userMessageLogger) {
         CloudService service = client.getService(serviceName);
-        CloudServicePlan servicePlan = findPlanForService(client, service, servicePlanName);
+        CloudServicePlan servicePlan = findPlanForService(client, service, servicePlanName, userMessageLogger);
         String servicePlanGuid = servicePlan.getMetadata()
                                             .getGuid()
                                             .toString();

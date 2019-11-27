@@ -12,6 +12,7 @@ import org.cloudfoundry.client.lib.domain.CloudServicePlan;
 import org.springframework.http.HttpStatus;
 
 import com.sap.cloud.lm.sl.cf.core.message.Messages;
+import com.sap.cloud.lm.sl.cf.core.util.UserMessageLogger;
 
 public abstract class CloudServiceOperator extends CustomControllerClient {
 
@@ -28,19 +29,33 @@ public abstract class CloudServiceOperator extends CustomControllerClient {
         super(restTemplateFactory);
     }
 
-    protected CloudServicePlan findPlanForService(CloudControllerClient client, CloudService service) {
-        return findPlanForService(client, service, service.getPlan());
+    protected CloudServicePlan findPlanForService(CloudControllerClient client, CloudService service, UserMessageLogger userMessageLogger) {
+        return findPlanForService(client, service, service.getPlan(), userMessageLogger);
     }
 
-    protected CloudServicePlan findPlanForService(CloudControllerClient client, CloudService service, String newPlan) {
+    protected CloudServicePlan findPlanForService(CloudControllerClient client, CloudService service, String newPlan,
+                                                  UserMessageLogger userMessageLogger) {
         List<CloudServiceOffering> offerings = getServiceOfferings(client, service);
+        CloudServicePlan cloudServicePlan = null;
         for (CloudServiceOffering offering : offerings) {
             for (CloudServicePlan plan : offering.getServicePlans()) {
                 if (plan.getName()
                         .equals(newPlan)) {
-                    return plan;
+                    if (userMessageLogger != null) {
+                        userMessageLogger.info("Service Name: " + offering.getName() + " Plan ID: " + plan.getMetadata()
+                                                                 .getGuid() + " New plan: " + newPlan);
+                    }
+                    if (cloudServicePlan == null) {
+                        cloudServicePlan = plan;
+                    }
                 }
             }
+        }
+        if (userMessageLogger != null) {
+            userMessageLogger.debug("Service Offerings: " + offerings);
+        }
+        if (cloudServicePlan != null) {
+            return cloudServicePlan;
         }
         throw new CloudOperationException(HttpStatus.NOT_FOUND,
                                           HttpStatus.NOT_FOUND.getReasonPhrase(),
