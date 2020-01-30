@@ -75,6 +75,7 @@ public class ProcessMtaArchiveStep extends SyncFlowableStep {
         Manifest manifest = ArchiveHandler.getManifest(appArchiveStream, configuration.getMaxManifestSize());
         MtaArchiveHelper helper = getHelper(manifest);
         helper.init();
+
         return helper;
     }
 

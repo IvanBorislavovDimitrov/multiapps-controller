@@ -24,7 +24,7 @@ public class SetRetryPhaseAdditionalProcessAction implements AdditionalProcessAc
 
     @Override
     public void executeAdditionalProcessAction(String processInstanceId) {
-        flowableFacade.getActiveProcessExecutions(processInstanceId)
+        flowableFacade.getProcessExecutionsWithValidActivityId(processInstanceId)
                       .stream()
                       .map(this::toExecutionEntityImpl)
                       .filter(executionEntityImpl -> executionEntityImpl.getDeadLetterJobCount() > 0)
@@ -34,7 +34,7 @@ public class SetRetryPhaseAdditionalProcessAction implements AdditionalProcessAc
                                                                    .setVariable(executionProcessId, Constants.VAR_STEP_PHASE,
                                                                                 StepPhase.RETRY.toString()));
     }
-    
+
     private ExecutionEntityImpl toExecutionEntityImpl(Execution e) {
         return (ExecutionEntityImpl)e;
     }

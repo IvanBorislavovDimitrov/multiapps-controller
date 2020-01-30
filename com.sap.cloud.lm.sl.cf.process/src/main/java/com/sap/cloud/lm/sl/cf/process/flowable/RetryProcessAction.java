@@ -1,7 +1,6 @@
 package com.sap.cloud.lm.sl.cf.process.flowable;
 
 import java.util.List;
-import java.util.ListIterator;
 
 import javax.inject.Inject;
 import javax.inject.Named;
@@ -30,20 +29,15 @@ public class RetryProcessAction extends ProcessAction {
 
     @Override
     protected void executeActualProcessAction(String user, String superProcessInstanceId) {
-        List<String> subProcessIds = getActiveExecutionIds(superProcessInstanceId);
-        ListIterator<String> subProcessesIdsIterator = subProcessIds.listIterator(subProcessIds.size());
-
+        List<String> activeExecutionIdsWithoutChildren = flowableFacade.getInactiveExecutionIdsWithoutChildren(superProcessInstanceId);
         updateUserIfNecessary(user, superProcessInstanceId);
-        while (subProcessesIdsIterator.hasPrevious()) {
-            String subProcessId = subProcessesIdsIterator.previous();
-            retryProcess(subProcessId);
-        }
+        activeExecutionIdsWithoutChildren.forEach(this::retryProcess);
         historicOperationEventPersister.add(superProcessInstanceId, EventType.RETRIED);
     }
 
-    private void retryProcess(String subProcessId) {
+    private void retryProcess(String executionId) {
         try {
-            flowableFacade.executeJob(subProcessId);
+            flowableFacade.executeJob(executionId);
         } catch (RuntimeException e) {
             // Consider the retry as successful. The execution error could be later obtained through
             // the getError() method.

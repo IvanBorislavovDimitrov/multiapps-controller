@@ -1,11 +1,14 @@
 package com.sap.cloud.lm.sl.cf.process.flowable;
 
+import java.text.MessageFormat;
 import java.util.List;
 import java.util.stream.Collectors;
 
 import javax.inject.Inject;
 
 import org.flowable.engine.HistoryService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.sap.cloud.lm.sl.cf.core.cf.CloudControllerClientProvider;
 import com.sap.cloud.lm.sl.cf.process.Constants;
@@ -14,6 +17,7 @@ import com.sap.cloud.lm.sl.cf.process.util.HistoricVariablesUtil;
 
 public abstract class ProcessAction {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(ProcessAction.class);
     protected final FlowableFacade flowableFacade;
     protected final List<AdditionalProcessAction> additionalProcessActions;
     @Inject

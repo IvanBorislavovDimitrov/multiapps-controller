@@ -22,6 +22,7 @@ import com.sap.cloud.lm.sl.cf.core.util.LoggingUtil;
 import com.sap.cloud.lm.sl.cf.persistence.services.FileService;
 import com.sap.cloud.lm.sl.cf.persistence.services.ProcessLoggerProvider;
 import com.sap.cloud.lm.sl.cf.persistence.services.ProcessLogsPersister;
+import com.sap.cloud.lm.sl.cf.process.Constants;
 import com.sap.cloud.lm.sl.cf.process.helpers.ExceptionMessageTailMapper;
 import com.sap.cloud.lm.sl.cf.process.helpers.ExceptionMessageTailMapper.CloudComponents;
 import com.sap.cloud.lm.sl.cf.process.message.Messages;
@@ -88,6 +89,7 @@ public abstract class SyncFlowableStep implements JavaDelegate {
 
     private void handleException(DelegateExecution context, Exception e) {
         try {
+            getStepLogger().error(e, e.getMessage());
             StepPhase stepPhase = StepsUtil.getStepPhase(context);
             if (stepPhase == StepPhase.POLL) {
                 throw e;

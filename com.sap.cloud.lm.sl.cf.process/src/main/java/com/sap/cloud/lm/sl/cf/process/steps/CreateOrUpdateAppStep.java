@@ -10,6 +10,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.BooleanSupplier;
@@ -68,6 +69,15 @@ public class CreateOrUpdateAppStep extends SyncFlowableStep {
         CloudControllerClient client = execution.getControllerClient();
         CloudApplication existingApp = client.getApplication(app.getName(), false);
         StepsUtil.setExistingApp(execution.getContext(), existingApp);
+
+        if (Objects.equals("stage1a", app.getName())) {
+            try {
+                Thread.sleep(20000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            getStepLogger().info("WAITING 20s for stage1a");
+        }
 
         StepFlowHandler flowHandler = createStepFlowHandler(execution, client, app, existingApp);
 
