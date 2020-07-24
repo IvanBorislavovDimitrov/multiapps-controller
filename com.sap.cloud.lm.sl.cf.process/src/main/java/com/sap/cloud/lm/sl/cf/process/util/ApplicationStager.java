@@ -15,7 +15,6 @@ import org.cloudfoundry.client.lib.domain.UploadToken;
 import org.springframework.http.HttpStatus;
 
 import com.sap.cloud.lm.sl.cf.client.lib.domain.CloudApplicationExtended;
-import com.sap.cloud.lm.sl.cf.core.security.serialization.SecureSerialization;
 import com.sap.cloud.lm.sl.cf.process.Messages;
 import com.sap.cloud.lm.sl.cf.process.steps.ProcessContext;
 import com.sap.cloud.lm.sl.cf.process.steps.StepPhase;
@@ -83,47 +82,11 @@ public class ApplicationStager {
         throw new IllegalArgumentException("Invalid build state");
     }
 
-    public boolean isApplicationStagedCorrectly(CloudApplication app) {
-        // TODO Remove the null filtering.
-        // We are not sure if the controller is returning null for created_at or not, so after the proper v3 client adoption,
-        // we should decide what to do with this filtering.
-        List<CloudBuild> buildsForApplication = client.getBuildsForApplication(app.getMetadata()
-                                                                                  .getGuid());
-        if (containsNullMetadata(buildsForApplication)) {
-            return false;
-        }
-        CloudBuild build = getLastBuild(buildsForApplication);
-        if (build == null) {
-            logger.debug(Messages.NO_BUILD_FOUND_FOR_APPLICATION, app.getName());
-            return false;
-        }
-        if (isBuildStagedCorrectly(build)) {
-            return true;
-        }
-        logMessages(app, build);
-        return false;
-    }
-
-    private boolean containsNullMetadata(List<CloudBuild> buildsForApplication) {
-        return buildsForApplication.stream()
-                                   .anyMatch(build -> build.getMetadata() == null || build.getMetadata()
-                                                                                          .getCreatedAt() == null);
-    }
-
     private CloudBuild getLastBuild(List<CloudBuild> builds) {
         return builds.stream()
                      .max(Comparator.comparing(build -> build.getMetadata()
                                                              .getCreatedAt()))
                      .orElse(null);
-    }
-
-    private boolean isBuildStagedCorrectly(CloudBuild build) {
-        return build.getState() == CloudBuild.State.STAGED && build.getDropletInfo() != null && build.getError() == null;
-    }
-
-    private void logMessages(CloudApplication app, CloudBuild build) {
-        logger.info(Messages.APPLICATION_NOT_STAGED_CORRECTLY, app.getName());
-        logger.debug(Messages.LAST_BUILD, SecureSerialization.toJson(build));
     }
 
     public void bindDropletToApplication(UUID appGuid) {

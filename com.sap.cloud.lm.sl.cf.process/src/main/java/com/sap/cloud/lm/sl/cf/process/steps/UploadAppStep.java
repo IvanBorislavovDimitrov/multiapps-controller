@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.text.MessageFormat;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -15,6 +16,8 @@ import javax.inject.Named;
 
 import org.cloudfoundry.client.lib.CloudControllerClient;
 import org.cloudfoundry.client.lib.domain.CloudApplication;
+import org.cloudfoundry.client.lib.domain.CloudPackage;
+import org.cloudfoundry.client.lib.domain.ImmutableUploadToken;
 import org.cloudfoundry.client.lib.domain.Status;
 import org.cloudfoundry.client.lib.domain.UploadToken;
 import org.slf4j.Logger;
@@ -29,14 +32,15 @@ import com.sap.cloud.lm.sl.cf.core.helpers.ApplicationEnvironmentUpdater;
 import com.sap.cloud.lm.sl.cf.core.helpers.ApplicationFileDigestDetector;
 import com.sap.cloud.lm.sl.cf.core.helpers.MtaArchiveElements;
 import com.sap.cloud.lm.sl.cf.core.model.SupportedParameters;
+import com.sap.cloud.lm.sl.cf.core.security.serialization.SecureSerialization;
 import com.sap.cloud.lm.sl.cf.core.util.FileUtils;
 import com.sap.cloud.lm.sl.cf.persistence.services.FileContentProcessor;
 import com.sap.cloud.lm.sl.cf.persistence.services.FileStorageException;
 import com.sap.cloud.lm.sl.cf.process.Messages;
 import com.sap.cloud.lm.sl.cf.process.util.ApplicationArchiveContext;
 import com.sap.cloud.lm.sl.cf.process.util.ApplicationArchiveReader;
-import com.sap.cloud.lm.sl.cf.process.util.ApplicationStager;
 import com.sap.cloud.lm.sl.cf.process.util.ApplicationZipBuilder;
+import com.sap.cloud.lm.sl.cf.process.util.CloudPackagesGetter;
 import com.sap.cloud.lm.sl.cf.process.variables.Variables;
 import com.sap.cloud.lm.sl.common.SLException;
 
@@ -44,14 +48,15 @@ import com.sap.cloud.lm.sl.common.SLException;
 @Scope(BeanDefinition.SCOPE_PROTOTYPE)
 public class UploadAppStep extends TimeoutAsyncFlowableStep {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(UploadAppStep.class);
-
+    public static final String THE_NEWEST_PACKAGE_WILL_BE_USED_0 = "The newest package will be used: \"{0}\"!";
     static final int DEFAULT_APP_UPLOAD_TIMEOUT = (int) TimeUnit.HOURS.toSeconds(1);
-
+    private static final Logger LOGGER = LoggerFactory.getLogger(UploadAppStep.class);
     @Inject
     protected ApplicationArchiveReader applicationArchiveReader;
     @Inject
     protected ApplicationZipBuilder applicationZipBuilder;
+    @Inject
+    protected CloudPackagesGetter cloudPackagesGetter;
 
     @Override
     public StepPhase executeAsyncStep(ProcessContext context) throws FileStorageException {
@@ -73,23 +78,30 @@ public class UploadAppStep extends TimeoutAsyncFlowableStep {
         CloudControllerClient client = context.getControllerClient();
 
         CloudApplication cloudApp = client.getApplication(appName);
+
+        Optional<CloudPackage> latestUnusedPackage = cloudPackagesGetter.getLatestUnusedPackage(client, cloudApp.getGuid());
         boolean contentChanged = detectApplicationFileDigestChanges(context, cloudApp, client, newApplicationDigest);
-        if (!contentChanged && isAppStagedCorrectly(context, cloudApp)) {
-            getStepLogger().info(Messages.CONTENT_OF_APPLICATION_0_IS_NOT_CHANGED, appName);
-            return StepPhase.DONE;
+        if (latestUnusedPackage.isPresent() && isCloudPackageInValidState(latestUnusedPackage.get()) && !contentChanged) {
+            getStepLogger().debug(THE_NEWEST_PACKAGE_WILL_BE_USED_0, SecureSerialization.toJson(latestUnusedPackage));
+            context.setVariable(Variables.UPLOAD_TOKEN, ImmutableUploadToken.builder()
+                                                                            .packageGuid(latestUnusedPackage.get()
+                                                                                                            .getGuid())
+                                                                            .build());
+            return StepPhase.POLL;
         }
-
-        getStepLogger().debug(Messages.UPLOADING_FILE_0_FOR_APP_1, fileName, appName);
-        UploadToken uploadToken = asyncUploadFiles(context, client, app, appArchiveId, fileName);
-
-        getStepLogger().debug(Messages.STARTED_ASYNC_UPLOAD_OF_APP_0, appName);
-        context.setVariable(Variables.UPLOAD_TOKEN, uploadToken);
-        return StepPhase.POLL;
+        if ((latestUnusedPackage.isPresent() && !isCloudPackageInValidState(latestUnusedPackage.get())) || contentChanged) {
+            getStepLogger().debug(Messages.UPLOADING_FILE_0_FOR_APP_1, fileName, appName);
+            UploadToken uploadToken = asyncUploadFiles(context, client, app, appArchiveId, fileName);
+            getStepLogger().debug(Messages.STARTED_ASYNC_UPLOAD_OF_APP_0, appName);
+            context.setVariable(Variables.UPLOAD_TOKEN, uploadToken);
+            return StepPhase.POLL;
+        }
+        getStepLogger().info(Messages.CONTENT_OF_APPLICATION_0_IS_NOT_CHANGED, appName);
+        return StepPhase.DONE;
     }
 
-    private boolean isAppStagedCorrectly(ProcessContext context, CloudApplication cloudApp) {
-        ApplicationStager appStager = new ApplicationStager(context);
-        return appStager.isApplicationStagedCorrectly(cloudApp);
+    private boolean isCloudPackageInValidState(CloudPackage cloudPackage) {
+        return cloudPackage.getStatus() != Status.EXPIRED && cloudPackage.getStatus() != Status.FAILED;
     }
 
     @Override

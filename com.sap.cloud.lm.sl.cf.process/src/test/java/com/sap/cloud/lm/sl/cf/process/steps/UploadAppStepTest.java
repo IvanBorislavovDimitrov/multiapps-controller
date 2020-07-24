@@ -1,9 +1,10 @@
 package com.sap.cloud.lm.sl.cf.process.steps;
 
-import static java.text.MessageFormat.format;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -13,37 +14,26 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Date;
+import java.text.MessageFormat;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.apache.commons.io.FileUtils;
 import org.cloudfoundry.client.lib.CloudOperationException;
-import org.cloudfoundry.client.lib.domain.CloudBuild;
-import org.cloudfoundry.client.lib.domain.CloudBuild.State;
-import org.cloudfoundry.client.lib.domain.ImmutableCloudBuild;
-import org.cloudfoundry.client.lib.domain.ImmutableCloudBuild.ImmutableDropletInfo;
+import org.cloudfoundry.client.lib.domain.CloudPackage;
 import org.cloudfoundry.client.lib.domain.ImmutableCloudMetadata;
+import org.cloudfoundry.client.lib.domain.ImmutableCloudPackage;
 import org.cloudfoundry.client.lib.domain.ImmutableUploadToken;
+import org.cloudfoundry.client.lib.domain.Status;
 import org.cloudfoundry.client.lib.domain.UploadToken;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.runners.Enclosed;
-import org.junit.rules.ExpectedException;
-import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
-import org.mockito.stubbing.Answer;
 import org.springframework.http.HttpStatus;
 
 import com.sap.cloud.lm.sl.cf.client.lib.domain.CloudApplicationExtended;
@@ -55,125 +45,55 @@ import com.sap.cloud.lm.sl.cf.process.Messages;
 import com.sap.cloud.lm.sl.cf.process.util.ApplicationArchiveContext;
 import com.sap.cloud.lm.sl.cf.process.util.ApplicationArchiveReader;
 import com.sap.cloud.lm.sl.cf.process.util.ApplicationZipBuilder;
+import com.sap.cloud.lm.sl.cf.process.util.CloudPackagesGetter;
 import com.sap.cloud.lm.sl.cf.process.variables.Variables;
 import com.sap.cloud.lm.sl.common.SLException;
 import com.sap.cloud.lm.sl.common.util.JsonUtil;
 import com.sap.cloud.lm.sl.common.util.MapUtil;
 
-@RunWith(Enclosed.class)
 public class UploadAppStepTest {
 
-    @RunWith(Parameterized.class)
-    public static class UploadAppStepParameterizedTest extends SyncFlowableStepTest<UploadAppStep> {
-
-        private static final IOException IO_EXCEPTION = new IOException();
-        private static final CloudOperationException CO_EXCEPTION = new CloudOperationException(HttpStatus.BAD_REQUEST);
+    @Nested
+    class UploadAppStepGeneralTest extends SyncFlowableStepTest<UploadAppStep> {
 
         private static final String APP_NAME = "sample-app-backend";
         private static final String APP_FILE = "web.zip";
         private static final String SPACE = "space";
         private static final String APP_ARCHIVE = "sample-app.mtar";
-        private static final UploadToken UPLOAD_TOKEN = ImmutableUploadToken.builder()
-                                                                            .packageGuid(UUID.randomUUID())
-                                                                            .build();
-        private static final String MODULE_DIGEST = "439B99DFFD0583200D5D21F4CD1BF035";
-        private static final String DATE_PATTERN = "dd-MM-yyyy";
-
-        public final TemporaryFolder tempDir = new TemporaryFolder();
-        @Rule
-        public final ExpectedException expectedException = ExpectedException.none();
-
-        @Parameters
-        public static Iterable<Object[]> getParameters() {
-            return Arrays.asList(new Object[][] {
-// @formatter:off
-                // (00)
-                {
-                    null, null, true, null
-                },
-                // (01)
-                {
-                    format(Messages.ERROR_RETRIEVING_MTA_MODULE_CONTENT, APP_FILE), null, true, null
-                },
-                // (02)
-                {
-                    null, format(Messages.CF_ERROR, CO_EXCEPTION.getMessage()), true, null
-                },
-                // (03)
-                {
-                    null, null, true, Collections.emptyList()
-                },
-                // (04)
-                {
-                    null, null, true, Arrays.asList(createCloudBuild(State.STAGED, parseDate("20-03-2018")),
-                                                    createCloudBuild(State.FAILED, parseDate("21-03-2018")))
-                },
-                // (05)
-                {
-                    null, null, false, Arrays.asList(createCloudBuild(State.FAILED, parseDate("20-03-2018")),
-                                                     createCloudBuild(State.STAGED, parseDate("21-03-2018")))
-                },
-// @formatter:on
-            });
-        }
-
-        private final String expectedIOExceptionMessage;
-        private final String expectedCFExceptionMessage;
+        private static final String CURRENT_MODULE_DIGEST = "439B99DFFD0583200D5D21F4CD1BF035";
+        private static final String NEW_MODULE_DIGEST = "539B99DFFD0583200D5D21F4CD1BF035";
+        private final IOException IO_EXCEPTION = new IOException();
+        private final CloudOperationException CO_EXCEPTION = new CloudOperationException(HttpStatus.BAD_REQUEST);
+        private final UploadToken UPLOAD_TOKEN = ImmutableUploadToken.builder()
+                                                                     .packageGuid(UUID.randomUUID())
+                                                                     .build();
+        private final UUID PACKAGE_GUID = UUID.randomUUID();
         private final MtaArchiveElements mtaArchiveElements = new MtaArchiveElements();
-        private final List<CloudBuild> cloudBuilds;
-        private final boolean shouldUpload;
-
+        private final CloudPackagesGetter cloudPackagesGetter = Mockito.mock(CloudPackagesGetter.class);
+        @TempDir
+        Path tempDir;
         private File appFile;
 
-        public UploadAppStepParameterizedTest(String expectedIOExceptionMessage, String expectedCFExceptionMessage, boolean shouldUpload,
-                                              List<CloudBuild> cloudBuilds) {
-            this.expectedIOExceptionMessage = expectedIOExceptionMessage;
-            this.expectedCFExceptionMessage = expectedCFExceptionMessage;
-            this.shouldUpload = shouldUpload;
-            this.cloudBuilds = cloudBuilds;
-        }
-
-        @Before
+        @BeforeEach
         public void setUp() throws Exception {
-            loadParameters();
             prepareFileService();
             prepareContext();
-            prepareClients();
         }
 
-        @After
-        public void tearDown() {
-            FileUtils.deleteQuietly(appFile.getParentFile());
+        @SuppressWarnings("rawtypes")
+        private void prepareFileService() throws Exception {
+            appFile = new File(tempDir.toString() + File.separator + APP_FILE);
+            if (!appFile.exists()) {
+                appFile.createNewFile();
+            }
+            doAnswer(invocation -> {
+                FileContentProcessor contentProcessor = invocation.getArgument(2);
+                return contentProcessor.process(null);
+            }).when(fileService)
+              .processFileContent(Mockito.anyString(), Mockito.anyString(), Mockito.any());
         }
 
-        @Test
-        public void test() {
-            try {
-                step.execute(execution);
-            } catch (Exception e) {
-                assertFalse(appFile.exists());
-                throw e;
-            }
-
-            if (shouldUpload) {
-                assertEquals(UPLOAD_TOKEN, context.getVariable(Variables.UPLOAD_TOKEN));
-            } else {
-                assertNull(context.getVariable(Variables.UPLOAD_TOKEN));
-            }
-        }
-
-        public void loadParameters() {
-            if (expectedIOExceptionMessage != null) {
-                expectedException.expectMessage(expectedIOExceptionMessage);
-                expectedException.expect(SLException.class);
-            }
-            if (expectedCFExceptionMessage != null) {
-                expectedException.expectMessage(expectedCFExceptionMessage);
-                expectedException.expect(SLException.class);
-            }
-        }
-
-        public void prepareContext() {
+        private void prepareContext() {
             CloudApplicationExtended app = ImmutableCloudApplicationExtended.builder()
                                                                             .name(APP_NAME)
                                                                             .moduleName(APP_NAME)
@@ -188,7 +108,96 @@ public class UploadAppStepTest {
             when(configuration.getMaxResourceFileSize()).thenReturn(ApplicationConfiguration.DEFAULT_MAX_RESOURCE_FILE_SIZE);
         }
 
-        public void prepareClients() throws Exception {
+        @AfterEach
+        public void tearDown() {
+            FileUtils.deleteQuietly(appFile.getParentFile());
+        }
+
+        @Test
+        void testSuccessfulUpload() throws Exception {
+            prepareClients(null, null, NEW_MODULE_DIGEST);
+            step.execute(execution);
+            assertEquals(UPLOAD_TOKEN, context.getVariable(Variables.UPLOAD_TOKEN));
+            assertEquals(StepPhase.POLL.toString(), getExecutionStatus());
+        }
+
+        @Test
+        void testFailedUploadWithIOException() throws Exception {
+            String expectedIOExceptionMessage = MessageFormat.format(Messages.ERROR_RETRIEVING_MTA_MODULE_CONTENT, APP_FILE);
+            prepareClients(expectedIOExceptionMessage, null, NEW_MODULE_DIGEST);
+            Exception exception = assertThrows(SLException.class, () -> step.execute(execution));
+            assertTrue(exception.getMessage()
+                                .contains(expectedIOExceptionMessage));
+            assertFalse(appFile.exists());
+            assertNull(context.getVariable(Variables.UPLOAD_TOKEN));
+            assertEquals(StepPhase.RETRY.toString(), getExecutionStatus());
+        }
+
+        @Test
+        void testFailedUploadWithCFException() throws Exception {
+            String expectedCFExceptionMessage = MessageFormat.format(Messages.CF_ERROR, CO_EXCEPTION.getMessage());
+            prepareClients(null, expectedCFExceptionMessage, NEW_MODULE_DIGEST);
+            Exception exception = assertThrows(SLException.class, () -> step.execute(execution));
+            assertTrue(exception.getMessage()
+                                .contains(expectedCFExceptionMessage));
+            assertFalse(appFile.exists());
+            assertNull(context.getVariable(Variables.UPLOAD_TOKEN));
+            assertEquals(StepPhase.RETRY.toString(), getExecutionStatus());
+        }
+
+        @Test
+        void testWithAvailableValidCloudPackage() throws Exception {
+            prepareClients(null, null, CURRENT_MODULE_DIGEST);
+            mockCloudPackagesGetter(createCloudPackage(Status.PROCESSING_UPLOAD));
+            step.execute(execution);
+            UploadToken uploadToken = context.getVariable(Variables.UPLOAD_TOKEN);
+            assertEquals(PACKAGE_GUID, uploadToken.getPackageGuid());
+            assertEquals(StepPhase.POLL.toString(), getExecutionStatus());
+        }
+
+        @Test
+        void testWithAvailableFailedLatestPackageAndNonChangedApplicationContent() throws Exception {
+            prepareClients(null, null, CURRENT_MODULE_DIGEST);
+            mockCloudPackagesGetter(createCloudPackage(Status.FAILED));
+            step.execute(execution);
+            assertEquals(UPLOAD_TOKEN, context.getVariable(Variables.UPLOAD_TOKEN));
+            assertEquals(StepPhase.POLL.toString(), getExecutionStatus());
+        }
+
+        @Test
+        void testWithAvailableExpiredCloudPackageAndChangedContent() throws Exception {
+            prepareClients(null, null, NEW_MODULE_DIGEST);
+            mockCloudPackagesGetter(createCloudPackage(Status.EXPIRED));
+            step.execute(execution);
+            assertEquals(UPLOAD_TOKEN, context.getVariable(Variables.UPLOAD_TOKEN));
+            assertEquals(StepPhase.POLL.toString(), getExecutionStatus());
+        }
+
+        @Test
+        void testWithUnavailableNewerCloudPackageAndUnchangedContent() throws Exception {
+            prepareClients(null, null, CURRENT_MODULE_DIGEST);
+            step.execute(execution);
+            assertNull(context.getVariable(Variables.UPLOAD_TOKEN));
+            assertEquals(StepPhase.DONE.toString(), getExecutionStatus());
+        }
+
+        private CloudPackage createCloudPackage(Status status) {
+            ImmutableCloudMetadata cloudMetadata = ImmutableCloudMetadata.builder()
+                                                                         .guid(PACKAGE_GUID)
+                                                                         .build();
+            return ImmutableCloudPackage.builder()
+                                        .metadata(cloudMetadata)
+                                        .status(status)
+                                        .build();
+        }
+
+        private void mockCloudPackagesGetter(CloudPackage cloudPackage) {
+            Mockito.when(cloudPackagesGetter.getLatestUnusedPackage(any(), any()))
+                   .thenReturn(Optional.of(cloudPackage));
+        }
+
+        private void prepareClients(String expectedIOExceptionMessage, String expectedCFExceptionMessage, String applicationDigest)
+            throws Exception {
             if (expectedIOExceptionMessage == null && expectedCFExceptionMessage == null) {
                 when(client.asyncUploadApplication(eq(APP_NAME), eq(appFile), any())).thenReturn(UPLOAD_TOKEN);
             } else if (expectedIOExceptionMessage != null) {
@@ -196,11 +205,8 @@ public class UploadAppStepTest {
             } else {
                 when(client.asyncUploadApplication(eq(APP_NAME), eq(appFile), any())).thenThrow(CO_EXCEPTION);
             }
-
-            CloudApplicationExtended application = createApplication(cloudBuilds == null ? null : MODULE_DIGEST);
+            CloudApplicationExtended application = createApplication(applicationDigest);
             when(client.getApplication(APP_NAME)).thenReturn(application);
-            when(client.getBuildsForApplication(application.getMetadata()
-                                                           .getGuid())).thenReturn(cloudBuilds);
         }
 
         private CloudApplicationExtended createApplication(String digest) {
@@ -210,43 +216,16 @@ public class UploadAppStepTest {
                                                     .metadata(ImmutableCloudMetadata.builder()
                                                                                     .guid(UUID.randomUUID())
                                                                                     .build())
-                                                    .name(UploadAppStepParameterizedTest.APP_NAME)
-                                                    .moduleName(UploadAppStepParameterizedTest.APP_NAME)
+                                                    .name(UploadAppStepGeneralTest.APP_NAME)
+                                                    .moduleName(UploadAppStepGeneralTest.APP_NAME)
                                                     .putEnv(com.sap.cloud.lm.sl.cf.core.Constants.ENV_DEPLOY_ATTRIBUTES,
                                                             JsonUtil.toJson(deployAttributes))
                                                     .build();
         }
 
-        private static CloudBuild createCloudBuild(State state, Date createdAt) {
-            return ImmutableCloudBuild.builder()
-                                      .metadata(ImmutableCloudMetadata.builder()
-                                                                      .guid(UUID.randomUUID())
-                                                                      .createdAt(createdAt)
-                                                                      .build())
-                                      .dropletInfo(ImmutableDropletInfo.builder()
-                                                                       .guid(UUID.randomUUID())
-                                                                       .build())
-                                      .state(state)
-                                      .build();
-        }
-
-        private static Date parseDate(String date) {
-            try {
-                return new SimpleDateFormat(DATE_PATTERN).parse(date);
-            } catch (ParseException e) {
-                throw new RuntimeException("Invalid Date!");
-            }
-        }
-
-        @SuppressWarnings("rawtypes")
-        public void prepareFileService() throws Exception {
-            tempDir.create();
-            appFile = tempDir.newFile(APP_FILE);
-            doAnswer((Answer) invocation -> {
-                FileContentProcessor contentProcessor = invocation.getArgument(2);
-                return contentProcessor.process(null);
-            }).when(fileService)
-              .processFileContent(Mockito.anyString(), Mockito.anyString(), Mockito.any());
+        @Override
+        protected UploadAppStep createStep() {
+            return new UploadAppStepMock();
         }
 
         private class UploadAppStepMock extends UploadAppStep {
@@ -254,6 +233,7 @@ public class UploadAppStepTest {
             public UploadAppStepMock() {
                 applicationArchiveReader = getApplicationArchiveReader();
                 applicationZipBuilder = getApplicationZipBuilder(applicationArchiveReader);
+                cloudPackagesGetter = UploadAppStepGeneralTest.this.cloudPackagesGetter;
             }
 
             @Override
@@ -277,25 +257,21 @@ public class UploadAppStepTest {
 
         }
 
-        @Override
-        protected UploadAppStep createStep() {
-            return new UploadAppStepMock();
-        }
-
     }
 
-    public static class UploadAppStepTimeoutTest extends SyncFlowableStepTest<UploadAppStep> {
+    @Nested
+    class UploadAppStepTimeoutTest extends SyncFlowableStepTest<UploadAppStep> {
 
         private static final String APP_NAME = "sample-app-backend";
 
-        @Before
+        @BeforeEach
         public void prepareContext() {
             context.setVariable(Variables.MODULES_INDEX, 0);
             step.initializeStepLogger(execution);
         }
 
         @Test
-        public void testGetTimeoutWithoutAppParameter() {
+        void testGetTimeoutWithoutAppParameter() {
             CloudApplicationExtended app = ImmutableCloudApplicationExtended.builder()
                                                                             .name(APP_NAME)
                                                                             .build();
@@ -304,7 +280,7 @@ public class UploadAppStepTest {
         }
 
         @Test
-        public void testGetTimeoutWithAppParameter() {
+        void testGetTimeoutWithAppParameter() {
             CloudApplicationExtended app = ImmutableCloudApplicationExtended.builder()
                                                                             .name(APP_NAME)
                                                                             .env(MapUtil.asMap(com.sap.cloud.lm.sl.cf.core.Constants.ENV_DEPLOY_ATTRIBUTES,
@@ -328,12 +304,13 @@ public class UploadAppStepTest {
 
     }
 
-    public static class UploadAppStepWithoutFileNameTest extends SyncFlowableStepTest<UploadAppStep> {
+    @Nested
+    class UploadAppStepWithoutFileNameTest extends SyncFlowableStepTest<UploadAppStep> {
         private static final String SPACE = "space";
         private static final String APP_NAME = "simple-app";
         private static final String APP_ARCHIVE = "sample-app.mtar";
 
-        @Before
+        @BeforeEach
         public void setUp() {
             prepareContext();
         }
@@ -353,7 +330,7 @@ public class UploadAppStepTest {
         }
 
         @Test
-        public void testWithMissingFileNameMustReturnDone() {
+        void testWithMissingFileNameMustReturnDone() {
             step.execute(execution);
             assertStepFinishedSuccessfully();
         }
