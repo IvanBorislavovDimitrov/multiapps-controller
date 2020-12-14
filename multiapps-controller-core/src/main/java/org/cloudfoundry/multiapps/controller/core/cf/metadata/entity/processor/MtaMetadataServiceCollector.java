@@ -14,6 +14,10 @@ public class MtaMetadataServiceCollector implements MtaMetadataEntityCollector<C
 
     @Override
     public List<CloudServiceInstance> collect(CloudControllerClient client, MtaMetadataCriteria criteria) {
-        return client.getServiceInstancesByMetadataLabelSelector(criteria.get());
+        long start = System.currentTimeMillis();
+        List<CloudServiceInstance> serviceInstancesByMetadataLabelSelector = client.getServiceInstancesByMetadataLabelSelector(criteria.get());
+        long end = System.currentTimeMillis();
+        System.out.println("TIME FOR SERVICES: " + (end - start) / 1000.0);
+        return serviceInstancesByMetadataLabelSelector;
     }
 }

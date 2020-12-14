@@ -53,6 +53,7 @@ public class DeployedMtaDetector {
                                                                           .label(MtaMetadataLabels.MTA_ID)
                                                                           .hasValue(MtaMetadataUtil.getHashedLabel(mtaName))
                                                                           .build();
+        System.out.println("TOVA  E " + selectionCriteria.get());
 
         return getDeployedMtasByMetadataSelectionCriteria(selectionCriteria, client);
     }
