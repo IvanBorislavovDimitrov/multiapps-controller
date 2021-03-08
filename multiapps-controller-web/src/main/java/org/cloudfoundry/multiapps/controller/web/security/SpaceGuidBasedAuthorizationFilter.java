@@ -25,6 +25,9 @@ public abstract class SpaceGuidBasedAuthorizationFilter implements UriAuthorizat
 
     @Override
     public final boolean ensureUserIsAuthorized(HttpServletRequest request, HttpServletResponse response) throws IOException {
+
+        System.out.println("STIGNA LI E PEDERAS");
+
         String spaceGuid = extractAndLogSpaceGuid(request);
         try {
             authorizationChecker.ensureUserIsAuthorized(request, SecurityContextUtil.getUserInfo(), spaceGuid, null);

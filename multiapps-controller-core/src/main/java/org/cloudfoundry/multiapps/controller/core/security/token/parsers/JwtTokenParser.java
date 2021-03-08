@@ -5,8 +5,8 @@ import java.util.Map;
 import javax.inject.Inject;
 import javax.inject.Named;
 
+import org.cloudfoundry.multiapps.common.SLException;
 import org.cloudfoundry.multiapps.controller.client.uaa.UAAClient;
-import org.cloudfoundry.multiapps.controller.client.util.TokenFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.Order;
@@ -16,8 +16,9 @@ import org.springframework.security.jwt.crypto.sign.InvalidSignatureException;
 import org.springframework.security.jwt.crypto.sign.MacSigner;
 import org.springframework.security.jwt.crypto.sign.RsaVerifier;
 import org.springframework.security.jwt.crypto.sign.SignatureVerifier;
-import org.springframework.security.oauth2.common.OAuth2AccessToken;
-import org.springframework.security.oauth2.common.exceptions.InvalidTokenException;
+
+import com.sap.cloudfoundry.client.facade.oauth2.OAuth2AccessTokenWithAdditionalInfo;
+import com.sap.cloudfoundry.client.facade.oauth2.TokenFactory;
 
 @Named
 @Order(0)
@@ -30,13 +31,13 @@ public class JwtTokenParser implements TokenParser {
     private final UAAClient uaaClient;
 
     @Inject
-    public JwtTokenParser(TokenFactory tokenFactory, UAAClient uaaClient) {
-        this.tokenFactory = tokenFactory;
+    public JwtTokenParser(UAAClient uaaClient) {
+        this.tokenFactory = getTokenFactory();
         this.uaaClient = uaaClient;
     }
 
     @Override
-    public OAuth2AccessToken parse(String tokenString) {
+    public OAuth2AccessTokenWithAdditionalInfo parse(String tokenString) {
         try {
             verifyToken(tokenString);
 
@@ -50,7 +51,7 @@ public class JwtTokenParser implements TokenParser {
     protected void verifyToken(String tokenString) {
         try {
             decodeAndVerify(tokenString);
-        } catch (InvalidTokenException e) {
+        } catch (Exception e) {
             refreshTokenKey();
             decodeAndVerify(tokenString);
         }
@@ -61,7 +62,7 @@ public class JwtTokenParser implements TokenParser {
         try {
             JwtHelper.decodeAndVerify(tokenString, getSignatureVerifier(getCachedTokenKey()));
         } catch (InvalidSignatureException e) {
-            throw new InvalidTokenException(e.getMessage(), e);
+            throw new SLException(e.getMessage(), e);
         }
     }
 
@@ -101,7 +102,10 @@ public class JwtTokenParser implements TokenParser {
             throw new InternalAuthenticationServiceException("Response from /token_key does not contain a key value or an algorithm");
         }
         return new TokenKey(value.toString(), alg.toString());
+    }
 
+    private TokenFactory getTokenFactory() {
+        return new TokenFactory();
     }
 
     private static class TokenKey {

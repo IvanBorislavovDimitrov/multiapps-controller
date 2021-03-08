@@ -9,7 +9,7 @@ import javax.inject.Named;
 import javax.servlet.http.HttpServletRequest;
 
 import org.cloudfoundry.multiapps.common.SLException;
-import org.cloudfoundry.multiapps.controller.client.util.TokenFactory;
+import com.sap.cloudfoundry.client.facade.oauth2.TokenFactory;
 import org.cloudfoundry.multiapps.controller.core.Messages;
 import org.cloudfoundry.multiapps.controller.core.auditlogging.AuditLoggingProvider;
 import org.cloudfoundry.multiapps.controller.core.cf.CloudControllerClientProvider;
@@ -140,7 +140,8 @@ public class AuthorizationChecker {
 
     private boolean hasAdminScope(UserInfo userInfo) {
         return userInfo.getToken()
-                       .getScope()
+                       .getOAuth2AccessToken()
+                       .getScopes()
                        .contains(TokenFactory.SCOPE_CC_ADMIN);
     }
 

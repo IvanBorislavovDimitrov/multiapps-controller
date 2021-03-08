@@ -18,6 +18,7 @@ public class ProcessStepsConfiguration {
 
     @Bean
     public ModuleDeployProcessGetter moduleDeployProcessGetter() {
+        System.out.println("NEEE E");
         return new ModuleDeployProcessGetter();
     }
 }

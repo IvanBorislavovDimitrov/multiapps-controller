@@ -7,7 +7,7 @@ open module org.cloudfoundry.multiapps.controller.client {
 
     requires transitive org.cloudfoundry.client;
     requires transitive com.sap.cloudfoundry.client.facade;
-    requires transitive spring.security.oauth2;
+    requires spring.security.oauth2.core;
     requires transitive spring.web;
 
     requires org.apache.commons.collections4;

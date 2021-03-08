@@ -1,46 +1,46 @@
-package org.cloudfoundry.multiapps.controller.process.jobs;
-
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
-import java.util.List;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.springframework.security.oauth2.common.OAuth2AccessToken;
-import org.springframework.security.oauth2.provider.token.TokenStore;
-
-class TokensCleanerTest {
-
-    @Mock
-    private TokenStore tokenStore;
-    @InjectMocks
-    private TokensCleaner cleaner;
-
-    @BeforeEach
-    void initMocks() throws Exception {
-        MockitoAnnotations.openMocks(this)
-                          .close();
-    }
-
-    @Test
-    void testExecute() {
-        OAuth2AccessToken expiredToken = mock(OAuth2AccessToken.class);
-        when(expiredToken.isExpired()).thenReturn(true);
-        OAuth2AccessToken token = mock(OAuth2AccessToken.class);
-        when(token.isExpired()).thenReturn(false);
-
-        when(tokenStore.findTokensByClientId(anyString())).thenReturn(List.of(expiredToken, token));
-
-        cleaner.execute(null);
-        verify(tokenStore).removeAccessToken(expiredToken);
-        verify(tokenStore, never()).removeAccessToken(token);
-    }
-
-}
+//package org.cloudfoundry.multiapps.controller.process.jobs;
+//
+//import static org.mockito.ArgumentMatchers.anyString;
+//import static org.mockito.Mockito.mock;
+//import static org.mockito.Mockito.never;
+//import static org.mockito.Mockito.verify;
+//import static org.mockito.Mockito.when;
+//
+//import java.util.List;
+//
+//import org.junit.jupiter.api.BeforeEach;
+//import org.junit.jupiter.api.Test;
+//import org.mockito.InjectMocks;
+//import org.mockito.Mock;
+//import org.mockito.MockitoAnnotations;
+//import org.springframework.security.oauth2.common.OAuth2AccessToken;
+//import org.springframework.security.oauth2.provider.token.TokenStore;
+//
+//class TokensCleanerTest {
+//
+//    @Mock
+//    private TokenStore tokenStore;
+//    @InjectMocks
+//    private TokensCleaner cleaner;
+//
+//    @BeforeEach
+//    void initMocks() throws Exception {
+//        MockitoAnnotations.openMocks(this)
+//                          .close();
+//    }
+//
+//    @Test
+//    void testExecute() {
+//        OAuth2AccessToken expiredToken = mock(OAuth2AccessToken.class);
+//        when(expiredToken.isExpired()).thenReturn(true);
+//        OAuth2AccessToken token = mock(OAuth2AccessToken.class);
+//        when(token.isExpired()).thenReturn(false);
+//
+//        when(tokenStore.findTokensByClientId(anyString())).thenReturn(List.of(expiredToken, token));
+//
+//        cleaner.execute(null);
+//        verify(tokenStore).removeAccessToken(expiredToken);
+//        verify(tokenStore, never()).removeAccessToken(token);
+//    }
+//
+//}
