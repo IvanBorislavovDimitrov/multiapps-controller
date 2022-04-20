@@ -16,4 +16,4 @@ jobs:
         distribution: 'adopt'
 
     - name: Build with Maven
-      run: mvn clean install
+      run: mvn clean install sonar:sonar -Psonar -Dsonar.organization=cf-deploy-service -Dsonar.host.url=https://sonarcloud.io -Dsonar.login=7a673303bb245a13ad432c1d6de3db76c0dafed2 -Dsonar.branch.name="$GITHUB_JOB"
