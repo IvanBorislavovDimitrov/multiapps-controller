@@ -26,8 +26,11 @@ public class UpdateServiceParametersStep extends ServiceStep {
             return OperationExecutionState.FINISHED;
         }
         getStepLogger().info(Messages.UPDATING_SERVICE, service.getName());
-
-        client.updateServiceParameters(service.getName(), service.getCredentials());
+        if (service.isUserProvided()) {
+            client.updateUserProvidedServiceInstanceParameters(service.getName(), service.getCredentials());
+        } else {
+            client.updateManagedServiceInstanceParameters(service.getName(), service.getCredentials());
+        }
 
         getStepLogger().debug(Messages.SERVICE_UPDATED, service.getName());
 

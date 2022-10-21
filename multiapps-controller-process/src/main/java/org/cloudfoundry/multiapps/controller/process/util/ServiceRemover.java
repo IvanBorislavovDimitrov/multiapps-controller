@@ -70,7 +70,11 @@ public class ServiceRemover {
 
     private void deleteService(CloudControllerClient client, StepLogger stepLogger, CloudServiceInstance serviceInstance) {
         stepLogger.info(Messages.DELETING_SERVICE, serviceInstance.getName());
-        client.deleteServiceInstance(serviceInstance);
+        if (serviceInstance.isUserProvided()) { // TODO: Consider refactoring / factory
+            client.deleteUserProvidedServiceInstance(serviceInstance);
+        } else {
+            client.deleteManagedServiceInstance(serviceInstance);
+        }
         stepLogger.debug(Messages.SERVICE_DELETED, serviceInstance.getName());
     }
 

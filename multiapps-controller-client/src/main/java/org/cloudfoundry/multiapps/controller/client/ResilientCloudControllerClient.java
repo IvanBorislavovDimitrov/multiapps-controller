@@ -53,8 +53,8 @@ public class ResilientCloudControllerClient implements CloudControllerClient {
     }
 
     @Override
-    public void createServiceInstance(CloudServiceInstance serviceInstance) {
-        executeWithRetry(() -> delegate.createServiceInstance(serviceInstance));
+    public String createManagedServiceInstance(CloudServiceInstance serviceInstance) {
+        return executeWithRetry(() -> delegate.createManagedServiceInstance(serviceInstance));
     }
 
     @Override
@@ -116,13 +116,23 @@ public class ResilientCloudControllerClient implements CloudControllerClient {
     }
 
     @Override
-    public void deleteServiceInstance(String serviceInstanceName) {
-        executeWithRetry(() -> delegate.deleteServiceInstance(serviceInstanceName));
+    public String deleteManagedServiceInstance(String serviceInstanceName) {
+        return executeWithRetry(() -> delegate.deleteManagedServiceInstance(serviceInstanceName));
     }
 
     @Override
-    public void deleteServiceInstance(CloudServiceInstance serviceInstance) {
-        executeWithRetry(() -> delegate.deleteServiceInstance(serviceInstance));
+    public String deleteManagedServiceInstance(CloudServiceInstance serviceInstance) {
+        return executeWithRetry(() -> delegate.deleteManagedServiceInstance(serviceInstance));
+    }
+
+    @Override
+    public void deleteUserProvidedServiceInstance(String serviceInstanceName) {
+        executeWithRetry(() -> delegate.deleteUserProvidedServiceInstance(serviceInstanceName));
+    }
+
+    @Override
+    public void deleteUserProvidedServiceInstance(CloudServiceInstance serviceInstance) {
+        executeWithRetry(() -> delegate.deleteUserProvidedServiceInstance(serviceInstance));
     }
 
     @Override
@@ -401,13 +411,18 @@ public class ResilientCloudControllerClient implements CloudControllerClient {
     }
 
     @Override
-    public void updateServicePlan(String serviceName, String servicePlan) {
-        executeWithRetry(() -> delegate.updateServicePlan(serviceName, servicePlan));
+    public String updateServicePlan(String serviceName, String servicePlan) {
+        return executeWithRetry(() -> delegate.updateServicePlan(serviceName, servicePlan));
     }
 
     @Override
-    public void updateServiceParameters(String serviceName, Map<String, Object> parameters) {
-        executeWithRetry(() -> delegate.updateServiceParameters(serviceName, parameters));
+    public String updateManagedServiceInstanceParameters(String serviceName, Map<String, Object> parameters) {
+        return executeWithRetry(() -> delegate.updateManagedServiceInstanceParameters(serviceName, parameters));
+    }
+
+    @Override
+    public void updateUserProvidedServiceInstanceParameters(String serviceName, Map<String, Object> parameters) {
+        executeWithRetry(() -> delegate.updateUserProvidedServiceInstanceParameters(serviceName, parameters));
     }
 
     @Override
@@ -459,11 +474,6 @@ public class ResilientCloudControllerClient implements CloudControllerClient {
     @Override
     public void deleteAllApplications() {
         executeWithRetry(delegate::deleteAllApplications);
-    }
-
-    @Override
-    public void deleteAllServiceInstances() {
-        executeWithRetry(delegate::deleteAllServiceInstances);
     }
 
     @Override

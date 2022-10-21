@@ -749,6 +749,9 @@ public interface Variables {
                                                                            })
                                                                            .defaultValue(Collections.emptyList())
                                                                            .build();
+    Variable<String> SERVICE_TO_PROCESS_JOB_ID = ImmutableSimpleVariable.<String> builder()
+                                                                       .name("serviceToProcessJobId")
+                                                                       .build();
     //TODO revert back to:
     // ImmutableJsonBinaryVariable.<CloudApplication> builder()
     //                            .name("existingAppToPoll")

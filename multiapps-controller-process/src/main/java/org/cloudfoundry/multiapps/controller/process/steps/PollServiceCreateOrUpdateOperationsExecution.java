@@ -25,9 +25,16 @@ public class PollServiceCreateOrUpdateOperationsExecution extends PollServiceOpe
     protected List<CloudServiceInstanceExtended> getServicesData(ProcessContext context) {
         List<CloudServiceInstanceExtended> allServicesToCreate = context.getVariable(Variables.SERVICES_TO_CREATE);
         // There's no need to poll the creation or update of user-provided services, because it is done synchronously:
-        return allServicesToCreate.stream()
-                                  .filter(s -> !s.isUserProvided())
-                                  .collect(Collectors.toList());
+        List<CloudServiceInstanceExtended> collect = allServicesToCreate.stream()
+                .filter(s -> !s.isUserProvided())
+                .collect(Collectors.toList());
+        System.out.println("DONGOOOLEEEEE");
+        System.out.println("COLECT " + collect.size());
+        for (CloudServiceInstanceExtended cloudServiceInstanceExtended : collect) {
+            System.out.println("DO " + cloudServiceInstanceExtended.getName());
+        }
+        System.out.println("DONGOOOLEEEEE");
+        return collect;
     }
 
     @Override

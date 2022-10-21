@@ -33,7 +33,7 @@ public class CreateServiceStep extends ServiceStep {
         getStepLogger().info(Messages.CREATING_SERVICE_FROM_MTA_RESOURCE, service.getName(), service.getResourceName());
 
         try {
-            OperationExecutionState executionState = createCloudService(controllerClient, service);
+            OperationExecutionState executionState = createCloudService(context, controllerClient, service);
 
             getStepLogger().debug(Messages.SERVICE_CREATED, service.getName());
             return executionState;
@@ -44,7 +44,8 @@ public class CreateServiceStep extends ServiceStep {
         return OperationExecutionState.FINISHED;
     }
 
-    private OperationExecutionState createCloudService(CloudControllerClient client, CloudServiceInstanceExtended service) {
+    private OperationExecutionState createCloudService(ProcessContext context, CloudControllerClient client,
+                                                       CloudServiceInstanceExtended service) {
         if (serviceExists(service, client)) {
             getStepLogger().info(org.cloudfoundry.multiapps.controller.core.Messages.SERVICE_ALREADY_EXISTS, service.getName());
             return OperationExecutionState.FINISHED;
@@ -52,7 +53,7 @@ public class CreateServiceStep extends ServiceStep {
         if (service.isUserProvided()) {
             return createUserProvidedServiceInstance(client, service);
         }
-        return createManagedServiceInstance(client, service);
+        return createManagedServiceInstance(context, client, service);
     }
 
     private OperationExecutionState createUserProvidedServiceInstance(CloudControllerClient client, CloudServiceInstanceExtended service) {
@@ -69,12 +70,13 @@ public class CreateServiceStep extends ServiceStep {
         }
     }
 
-    private OperationExecutionState createManagedServiceInstance(CloudControllerClient client, CloudServiceInstanceExtended service) {
+    private OperationExecutionState createManagedServiceInstance(ProcessContext context, CloudControllerClient client,
+                                                                 CloudServiceInstanceExtended service) {
         Assert.notNull(service, "Service must not be null");
         Assert.notNull(service.getName(), "Service name must not be null");
         Assert.notNull(service.getLabel(), "Service label must not be null");
         Assert.notNull(service.getPlan(), "Service plan must not be null");
-        client.createServiceInstance(service);
+        context.setVariable(Variables.SERVICE_TO_PROCESS_JOB_ID, client.createManagedServiceInstance(service));
         return OperationExecutionState.EXECUTING;
     }
 
@@ -96,7 +98,9 @@ public class CreateServiceStep extends ServiceStep {
     protected List<AsyncExecution> getAsyncStepExecutions(ProcessContext context) {
         // The order is important. The metadata update should be done after the async creation of the service instance is done.
         // TODO: Add link to cloud_controller_ng issue.
-        return Arrays.asList(new PollServiceCreateOrUpdateOperationsExecution(getServiceOperationGetter(), getServiceProgressReporter()),
+        return Arrays.asList(new PollServiceInstanceOperationsExecution(),
+                             // new PollServiceCreateOrUpdateOperationsExecution(getServiceOperationGetter(), getServiceProgressReporter()),
+                             // TODO: Make it backwards compatible
                              new UpdateServiceMetadataExecution());
     }
 

@@ -7,7 +7,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-import com.sap.cloudfoundry.client.facade.domain.ServicePlanVisibility;
 import org.cloudfoundry.client.v3.Metadata;
 import org.cloudfoundry.multiapps.controller.core.security.serialization.SecureSerialization;
 import org.cloudfoundry.multiapps.controller.core.util.UriUtil;
@@ -38,6 +37,7 @@ import com.sap.cloudfoundry.client.facade.domain.CloudTask;
 import com.sap.cloudfoundry.client.facade.domain.DockerInfo;
 import com.sap.cloudfoundry.client.facade.domain.DropletInfo;
 import com.sap.cloudfoundry.client.facade.domain.InstancesInfo;
+import com.sap.cloudfoundry.client.facade.domain.ServicePlanVisibility;
 import com.sap.cloudfoundry.client.facade.domain.Staging;
 import com.sap.cloudfoundry.client.facade.domain.Upload;
 import com.sap.cloudfoundry.client.facade.domain.UserRole;
@@ -88,9 +88,9 @@ public class LoggingCloudControllerClient implements CloudControllerClient {
     }
 
     @Override
-    public void createServiceInstance(CloudServiceInstance serviceInstance) {
+    public String createManagedServiceInstance(CloudServiceInstance serviceInstance) {
         logger.debug(Messages.CREATING_SERVICE_INSTANCE_0, SecureSerialization.toJson(serviceInstance));
-        delegate.createServiceInstance(serviceInstance);
+        return delegate.createManagedServiceInstance(serviceInstance);
     }
 
     @Override
@@ -140,12 +140,6 @@ public class LoggingCloudControllerClient implements CloudControllerClient {
     }
 
     @Override
-    public void deleteAllServiceInstances() {
-        logger.debug(Messages.DELETING_ALL_SERVICE_INSTANCES);
-        delegate.deleteAllServiceInstances();
-    }
-
-    @Override
     public void deleteApplication(String applicationName) {
         logger.debug(Messages.DELETING_APPLICATION_0, applicationName);
         delegate.deleteApplication(applicationName);
@@ -170,15 +164,27 @@ public class LoggingCloudControllerClient implements CloudControllerClient {
     }
 
     @Override
-    public void deleteServiceInstance(String serviceInstanceName) {
+    public String deleteManagedServiceInstance(String serviceInstanceName) {
         logger.debug(Messages.DELETING_SERVICE_INSTANCE_0, serviceInstanceName);
-        delegate.deleteServiceInstance(serviceInstanceName);
+        return delegate.deleteManagedServiceInstance(serviceInstanceName);
     }
 
     @Override
-    public void deleteServiceInstance(CloudServiceInstance serviceInstance) {
+    public String deleteManagedServiceInstance(CloudServiceInstance serviceInstance) {
         logger.debug(Messages.DELETING_SERVICE_INSTANCE_0, serviceInstance.getName());
-        delegate.deleteServiceInstance(serviceInstance);
+        return delegate.deleteManagedServiceInstance(serviceInstance);
+    }
+
+    @Override
+    public void deleteUserProvidedServiceInstance(String serviceInstanceName) {
+        // TODO: LOG
+        delegate.deleteUserProvidedServiceInstance(serviceInstanceName);
+    }
+
+    @Override
+    public void deleteUserProvidedServiceInstance(CloudServiceInstance serviceInstance) {
+        // TODO: LOG
+        delegate.deleteUserProvidedServiceInstance(serviceInstance);
     }
 
     @Override
@@ -615,15 +621,21 @@ public class LoggingCloudControllerClient implements CloudControllerClient {
     }
 
     @Override
-    public void updateServicePlan(String serviceName, String servicePlan) {
+    public String updateServicePlan(String serviceName, String servicePlan) {
         logger.debug(Messages.UPDATING_SERVICE_PLAN, serviceName);
-        delegate.updateServicePlan(serviceName, servicePlan);
+        return delegate.updateServicePlan(serviceName, servicePlan);
     }
 
     @Override
-    public void updateServiceParameters(String serviceName, Map<String, Object> parameters) {
-        logger.debug(Messages.UPDATING_SERVICE_PARAMETERS, serviceName);
-        delegate.updateServiceParameters(serviceName, parameters);
+    public String updateManagedServiceInstanceParameters(String serviceName, Map<String, Object> parameters) {
+        // TODO: LOG
+        return delegate.updateManagedServiceInstanceParameters(serviceName, parameters);
+    }
+
+    @Override
+    public void updateUserProvidedServiceInstanceParameters(String serviceName, Map<String, Object> parameters) {
+        // TODO: LOG
+        delegate.updateUserProvidedServiceInstanceParameters(serviceName, parameters);
     }
 
     @Override
