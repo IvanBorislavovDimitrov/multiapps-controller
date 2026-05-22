@@ -13,6 +13,9 @@ public class CloudFoundryTokenProvider implements TokenProvider {
 
     @Override
     public OAuth2AccessTokenWithAdditionalInfo getToken() {
+        if (client.getToken() != null) {
+                    return client.getToken();
+        }
         return client.getToken();
     }
 
